@@ -1,0 +1,1 @@
+﻿{"name":"web-auto","version":"1.0.0","description":"Daily web automation","main":"auto.js","scripts":{"start":"node auto.js"},"dependencies":{"playwright":"^1.48.0"}}

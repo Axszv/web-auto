@@ -1,0 +1,42 @@
+﻿name: Daily Web Auto
+
+on:
+  schedule:
+    # 每天北京时间 9:00 (UTC 1:00)
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  auto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
+      - name: Run automation
+        run: node auto.js
+        env:
+          GOGOCS_EMAIL: ${{ secrets.GOGOCS_EMAIL }}
+          GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
+          SHAREDCHAT_EMAIL: ${{ secrets.SHAREDCHAT_EMAIL }}
+          SHAREDCHAT_PASSWORD: ${{ secrets.SHAREDCHAT_PASSWORD }}
+
+      - name: Commit updated cookies
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add cookies.json
+          git diff --cached --quiet || git commit -m "chore: update session cookies [skip ci]"
+          git push
