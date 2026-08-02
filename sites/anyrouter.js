@@ -27,21 +27,23 @@ async function run(config = {}) {
     viewport: { width: 1920, height: 1080 }
   });
 
+  // Load saved cookies (including session + old CF cookies)
   const saved = await loadCookies();
   if (saved.anyrouter && saved.anyrouter.length > 0) await ctx.addCookies(saved.anyrouter);
 
   const page = await ctx.newPage();
-  const TIMEOUT = 20000;
 
   try {
-    // Strict timeout: try main page then console, give up quickly
-    console.log('anyrouter: starting...');
-    
-    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
-    await sleep(2000);
+    // Step 1: Visit main page - this refreshes CF challenge cookies
+    // The session cookie from saved cookies will be sent, keeping us logged in
+    console.log('anyrouter: refreshing Cloudflare cookies...');
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await sleep(3000);
     console.log('anyrouter after main:', page.url());
 
-    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+    // Step 2: Try console with fresh CF cookies + saved session
+    console.log('anyrouter: checking session...');
+    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 20000 });
     await sleep(2000);
     const url = page.url();
     console.log('anyrouter URL:', url);
@@ -54,7 +56,7 @@ async function run(config = {}) {
           catch(e) { return { error: e.message }; }
         });
         console.log('anyrouter checkin:', JSON.stringify(cr));
-      } catch(e) { console.log('anyrouter checkin error:', e.message); }
+      } catch(e) { console.log('anyrouter checkin err:', e.message); }
 
       const cookies = await ctx.cookies(BASE);
       if (cookies.length > 0) {
@@ -62,13 +64,33 @@ async function run(config = {}) {
         all.anyrouter = cookies;
         await saveCookies(all);
       }
-      console.log('anyrouter done');
+      console.log('anyrouter done, cookies:', cookies.length);
       return { success: true };
     }
 
-    console.log('anyrouter: not logged in, OAuth blocked by Cloudflare on headless browser.');
-    console.log('anyrouter: run manually: node login-helper.js anyrouter');
-    return { success: false, error: 'need_manual_login' };
+    // Step 3: Session expired, try OAuth
+    console.log('anyrouter: session expired, trying OAuth...');
+    await page.goto(BASE + '/oauth/github', { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await sleep(5000);
+    if (page.url().includes('login') || page.url().includes('oauth')) {
+      console.log('anyrouter: OAuth blocked. run manually: node login-helper.js anyrouter');
+      return { success: false, error: 'need_manual_login' };
+    }
+
+    // OAuth succeeded
+    console.log('anyrouter: OAuth complete!');
+    const cr = await page.evaluate(async () => {
+      try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
+      catch(e) { return { error: e.message }; }
+    });
+    console.log('anyrouter checkin:', JSON.stringify(cr));
+
+    const cookies = await ctx.cookies(BASE);
+    const all = await loadCookies();
+    all.anyrouter = cookies;
+    await saveCookies(all);
+    console.log('anyrouter done, cookies:', cookies.length);
+    return { success: true };
 
   } catch (e) {
     console.error('anyrouter error:', e.message.substring(0, 100));
