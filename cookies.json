@@ -58,30 +58,30 @@
   "anyrouter": [
     {
       "name": "acw_tc",
-      "value": "9b66334517856679916407240e2468881741b5df3997954672f3fcf088",
+      "value": "a3b5839817856699564735880ebda025c8935c11cc18477d6ef4eb2f52",
       "domain": "anyrouter.top",
       "path": "/",
-      "expires": 1785671590.236745,
+      "expires": 1785673555.045456,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "cdn_sec_tc",
-      "value": "9b66334517856679916407240e2468881741b5df3997954672f3fcf088",
+      "value": "a3b5839817856699564735880ebda025c8935c11cc18477d6ef4eb2f52",
       "domain": "anyrouter.top",
       "path": "/",
-      "expires": 1785671590.236903,
+      "expires": 1785673555.04562,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "acw_sc__v2",
-      "value": "6a6f21971224155471dd684bbced7b92de760012",
+      "value": "6a6f29441862b815f635f914fbbc3d08fe4a7170",
       "domain": "anyrouter.top",
       "path": "/",
-      "expires": 1785671590.28038,
+      "expires": 1785673555.102354,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
