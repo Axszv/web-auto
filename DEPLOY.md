@@ -26,13 +26,9 @@ git commit -m "init: web auto automation"
 git push -u origin main
 ```
 
-推送时如果用 HTTPS，会提示输入 GitHub 用户名和 PAT（不是密码）。
-
 ## 步骤 4: 配置 GitHub Secrets
 
 仓库 → Settings → Secrets and variables → Actions → New repository secret
-
-添加以下 4 个 Secret：
 
 | Secret 名称 | 值 |
 |------------|-----|
@@ -41,38 +37,49 @@ git push -u origin main
 | `SHAREDCHAT_EMAIL` | 504740633@qq.com |
 | `SHAREDCHAT_PASSWORD` | LZ37265981^ |
 
-## 步骤 5: 处理 agentrouter / anyrouter
+## 步骤 5: 处理 anyrouter 和 agentrouter
 
-这两个站点需要手动登录一次获取 session cookie。
+### anyrouter（需要手动完成一次 GitHub OAuth）
 
-**方案 A：手动登录后上传 cookies.json**
 ```powershell
-# 本地运行手动登录
-node login-helper.js agentrouter
+# 运行登录助手，浏览器会打开并完成 OAuth
 node login-helper.js anyrouter
-# 然后提交 cookies.json
-git add cookies.json
-git commit -m "add initial cookies"
-git push
+# 登录完成后，cookies 自动保存到 cookies.json
+# 推送到 GitHub
+git add cookies.json && git commit -m "add anyrouter cookie" && git push
 ```
 
-**方案 B（推荐）：直接在 GitHub Secrets 配置 token**
-agentrouter 的 token 不能用于网页登录，但可以在 config.json 里配置用户名/密码（如果有）。
-如果只有 token，只能手动登录后把 cookies.json 推上去。
+### agentrouter（需要用户名/密码）
+
+如果你知道 agentrouter 的用户名和密码：
+```json
+// config.json 中配置
+{
+  "sites": [{
+    "name": "agentrouter",
+    "config": { "username": "your_email", "password": "your_password" }
+  }]
+}
+```
+
+如果没有用户名密码，只能手动登录：
+```powershell
+node login-helper.js agentrouter
+git add cookies.json && git commit -m "add agentrouter cookie" && git push
+```
 
 ## 步骤 6: 首次运行 workflow
 
 1. 仓库 → Actions → "Daily Web Auto" → Run workflow
-2. 查看日志，确认 gogocs 和 sharedchat 成功
-3. 如果 agentrouter/anyrouter 失败，按步骤 5 处理
+2. 查看日志，确认各站点运行结果
 
 ## 定时设置
 
 Workflow 默认每天 UTC 1:00（北京时间 9:00）自动运行。
-修改时间：编辑 `.github/workflows/daily.yml` 中的 cron 字段。
 
 ## 注意事项
 
 - cookies.json 包含 session 信息，务必使用**私有仓库**
 - anyrouter 的 session cookie 有效期约 30 天，过期后需重新手动登录
-- agentrouter 的 token 不是登录密码，需使用用户名/密码或手动 OAuth
+- GitHub Actions 上只有内置 Chromium（无 msedge），anyrouter 的 Cloudflare 绕过可能偶尔失败
+- agentrouter 的 token 不能用于网页登录，需要用户名/密码

@@ -48,7 +48,6 @@ async function run(config = {}) {
     console.log('agentrouter URL:', url);
 
     if (url.includes('login')) {
-      // Try token first
       await page.goto(BASE + '/login', { waitUntil: 'networkidle', timeout: 30000 });
       await sleep(2000);
       const inputs = await page.locator('input').all();
@@ -60,7 +59,7 @@ async function run(config = {}) {
         await sleep(3000);
       }
       if (page.url().includes('login')) {
-        console.log('agentrouter: need username/password (token invalid). Set config.token or add credentials manually.');
+        console.log('agentrouter: need username/password (token invalid).');
         return { success: false, error: 'need_manual_login' };
       }
     }
