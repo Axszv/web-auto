@@ -1,4 +1,4 @@
-﻿// sites/anyrouter.js — 完整的 Cloudflare + GitHub OAuth 自动化
+﻿// sites/anyrouter.js
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -42,22 +42,21 @@ async function run(config = {}) {
   const page = await ctx.newPage();
 
   try {
-    // Step 1: Visit main page to get Cloudflare challenge cookies
+    // Step 1: bypass Cloudflare by visiting main page
     console.log('anyrouter: bypassing Cloudflare...');
-    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 25000 });
     await sleep(3000);
-    const afterMain = page.url();
-    console.log('anyrouter after main:', afterMain);
+    console.log('anyrouter after main:', page.url());
 
-    // Step 2: Check if already logged in (session cookie still valid)
-    await page.goto(BASE + '/console/personal', { waitUntil: 'networkidle', timeout: 30000 });
+    // Step 2: try console with existing cookies
+    console.log('anyrouter: checking session...');
+    await page.goto(BASE + '/console/personal', { waitUntil: 'networkidle', timeout: 25000 });
     await sleep(3000);
     const url = page.url();
     console.log('anyrouter URL:', url);
 
     if (!url.includes('login') && !url.includes('oauth')) {
-      console.log('anyrouter: already logged in!');
-      // Do checkin
+      console.log('anyrouter: logged in!');
       const cr = await page.evaluate(async () => {
         try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
         catch(e) { return { error: e.message }; }
@@ -74,92 +73,59 @@ async function run(config = {}) {
       return { success: true };
     }
 
-    // Step 3: Try GitHub OAuth - click the button
+    // Step 3: try OAuth - with strict timeout
     console.log('anyrouter: trying GitHub OAuth...');
-    await page.goto(BASE + '/login', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(BASE + '/login', { waitUntil: 'networkidle', timeout: 25000 });
     await sleep(2000);
 
-    // Click GitHub button via evaluate (bypasses Cloudflare overlay)
     const clicked = await page.evaluate(() => {
-      const all = document.querySelectorAll('button');
-      for (const el of all) {
-        if (el.textContent && el.textContent.includes('GitHub')) {
-          el.click();
-          return 'clicked';
-        }
-      }
-      // Try spans too
-      const spans = document.querySelectorAll('span');
-      for (const el of spans) {
-        if (el.textContent && el.textContent.includes('GitHub')) {
-          el.click();
-          return 'clicked-span';
-        }
-      }
-      return 'not-found';
+      const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('GitHub'));
+      if (btn) { btn.click(); return 'button'; }
+      const span = Array.from(document.querySelectorAll('span')).find(s => s.textContent.includes('GitHub'));
+      if (span) { span.click(); return 'span'; }
+      return 'none';
     });
-    console.log('anyrouter click result:', clicked);
+    console.log('anyrouter click:', clicked);
 
-    await sleep(5000);
-
-    // Check if OAuth page opened
+    // Wait for OAuth page to open (max 10s)
+    await sleep(8000);
     const oauthPage = ctx.pages().find(p => p.url().includes('github.com'));
+    
     if (oauthPage) {
-      console.log('anyrouter: OAuth page opened');
-      console.log('anyrouter: GitHub OAuth URL:', oauthPage.url().substring(0, 80));
-
-      // Check if GitHub session exists
+      console.log('anyrouter: OAuth opened');
+      // Check if already signed into GitHub
       const ghText = await oauthPage.locator('body').innerText().catch(() => '');
       const ghSignedIn = ghText.includes('Sign out') || ghText.includes('退出');
-      console.log('anyrouter: GitHub signed in:', ghSignedIn);
-
-      if (!ghSignedIn) {
-        console.log('anyrouter: GitHub not logged in. Please login in the opened browser tab.');
-        // Wait for user to login
-        for (let i = 0; i < 180; i++) {
-          await sleep(2000);
-          const newText = await oauthPage.locator('body').innerText().catch(() => '');
-          if (newText.includes('Sign out') || newText.includes('退出')) {
-            console.log('anyrouter: GitHub login detected!');
-            break;
-          }
-          if (i % 10 === 0) console.log('anyrouter: waiting for GitHub login... ' + (i*2) + 's');
-        }
-      }
-
-      // Wait for OAuth callback
-      console.log('anyrouter: waiting for OAuth callback...');
-      for (let i = 0; i < 90; i++) {
-        await sleep(2000);
-        const anyrouterPages = ctx.pages().filter(p => p.url().includes('anyrouter.top'));
-        for (const p of anyrouterPages) {
-          const u = p.url();
-          if (!u.includes('login') && !u.includes('oauth') && !u.includes('github')) {
-            console.log('anyrouter: OAuth complete! URL:', u);
-            
-            // Do checkin
-            const cr = await p.evaluate(async () => {
-              try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
-              catch(e) { return { error: e.message }; }
-            });
-            console.log('anyrouter checkin:', JSON.stringify(cr));
-            
-            const cookies = await ctx.cookies(BASE);
-            const all = await loadCookies();
-            all.anyrouter = cookies;
-            await saveCookies(all);
-            console.log('anyrouter cookies saved:', cookies.length);
-            
-            await browser.close();
-            return { success: true };
+      
+      if (ghSignedIn) {
+        console.log('anyrouter: GitHub already signed in, waiting for redirect...');
+        // Wait for redirect back to anyrouter (max 15s)
+        for (let i = 0; i < 15; i++) {
+          await sleep(1000);
+          const anyPages = ctx.pages().filter(p => p.url().includes('anyrouter.top'));
+          for (const p of anyPages) {
+            if (!p.url().includes('login') && !p.url().includes('oauth') && !p.url().includes('github')) {
+              console.log('anyrouter: OAuth callback received!');
+              const cr = await p.evaluate(async () => {
+                try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
+                catch(e) { return { error: e.message }; }
+              });
+              console.log('anyrouter checkin:', JSON.stringify(cr));
+              const cookies = await ctx.cookies(BASE);
+              const all = await loadCookies();
+              all.anyrouter = cookies;
+              await saveCookies(all);
+              return { success: true };
+            }
           }
         }
-        if (i % 10 === 0) console.log('anyrouter: waiting... ' + (i*2) + 's');
       }
+      console.log('anyrouter: OAuth did not complete automatically.');
     }
 
-    console.log('anyrouter: OAuth failed or timed out.');
-    return { success: false, error: 'OAuth failed - need manual login' };
+    console.log('anyrouter: cannot auto-login. Need manual GitHub OAuth login.');
+    console.log('anyrouter: Run: node login-helper.js anyrouter');
+    return { success: false, error: 'need_manual_login' };
 
   } catch (e) {
     console.error('anyrouter error:', e.message);
