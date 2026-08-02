@@ -11,6 +11,7 @@ permissions:
 jobs:
   auto:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,9 +40,6 @@ jobs:
         run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-          git stash
           git pull --rebase origin main
-          git stash pop
           git add cookies.json
-          git diff --cached --quiet || git commit -m "chore: update session cookies [skip ci]"
-          git push
+          git diff --cached --quiet && echo "No cookie changes" || (git commit -m "chore: update session cookies [skip ci]" && git push)
