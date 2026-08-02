@@ -35,10 +35,11 @@ jobs:
           SHAREDCHAT_EMAIL: ${{ secrets.SHAREDCHAT_EMAIL }}
           SHAREDCHAT_PASSWORD: ${{ secrets.SHAREDCHAT_PASSWORD }}
 
-      - name: Commit updated cookies
+      - name: Commit and push updated cookies
         run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
+          git pull --rebase origin main
           git add cookies.json
           git diff --cached --quiet || git commit -m "chore: update session cookies [skip ci]"
           git push
