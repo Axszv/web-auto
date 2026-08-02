@@ -46,10 +46,10 @@
     },
     {
       "name": "acw_tc",
-      "value": "0a0f6ba617856724299688285e5090102bf9f21232bb2808c8baf947bc4e34",
+      "value": "0a0f6ba617856817960231234e509667316d4ac81486153c20318dea98d32e",
       "domain": "agentrouter.org",
       "path": "/",
-      "expires": 1785674230.151355,
+      "expires": 1785683596.192184,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
