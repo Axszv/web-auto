@@ -33,6 +33,26 @@
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
+    },
+    {
+      "name": "_c_WBKFRo",
+      "value": "LKVO0qa1HnmOVCT1hBh8Z5gMwVuoLjoT4DTEtre4",
+      "domain": ".agentrouter.org",
+      "path": "/",
+      "expires": 1817205243,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_nb_ioWEgULi",
+      "value": "",
+      "domain": ".agentrouter.org",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
     }
   ],
   "anyrouter": [
