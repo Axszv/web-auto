@@ -1,0 +1,80 @@
+{
+  "gogocs": [
+    {
+      "name": "sid",
+      "value": "d37bb123de9676f6609c2bf5f1f58b1d72d98534a69d95ddff834afd05781850",
+      "domain": "gogocs.xyz",
+      "path": "/",
+      "expires": 1785749085.005723,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "sharedchat": [
+    {
+      "name": "share-session",
+      "value": "346bf9211c0f43e3ad165cd9d4100a87",
+      "domain": "new.sharedchat.cc",
+      "path": "/",
+      "expires": 1786267236.996928,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "agentrouter": [
+    {
+      "name": "acw_tc",
+      "value": "0a0f6be917856679675014346e0a18f8d29a6ec4726f5bda0f77e8ea63c90b",
+      "domain": "agentrouter.org",
+      "path": "/",
+      "expires": 1785669766.154695,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "anyrouter": [
+    {
+      "name": "acw_tc",
+      "value": "9b66334517856679916407240e2468881741b5df3997954672f3fcf088",
+      "domain": "anyrouter.top",
+      "path": "/",
+      "expires": 1785671590.236745,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "cdn_sec_tc",
+      "value": "9b66334517856679916407240e2468881741b5df3997954672f3fcf088",
+      "domain": "anyrouter.top",
+      "path": "/",
+      "expires": 1785671590.236903,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "acw_sc__v2",
+      "value": "6a6f21971224155471dd684bbced7b92de760012",
+      "domain": "anyrouter.top",
+      "path": "/",
+      "expires": 1785671590.28038,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "session",
+      "value": "MTc4NTY2ODAyMnxEWDhFQVFMX2dBQUJFQUVRQUFBeF80QUFBUVp6ZEhKcGJtY01EUUFMYjJGMWRHaGZjM1JoZEdVR2MzUnlhVzVuREE0QURHcE9hVVF3ZUZZelZXcEhiUT09fBcsVQLpmeEPOBbitU_iP8S6TkdxI3Dx7IOUMTTtu6SY",
+      "domain": "anyrouter.top",
+      "path": "/",
+      "expires": 1788260021.152992,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Strict"
+    }
+  ]
+}
