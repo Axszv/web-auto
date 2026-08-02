@@ -25,16 +25,6 @@
   ],
   "agentrouter": [
     {
-      "name": "acw_tc",
-      "value": "0a0f6be917856679675014346e0a18f8d29a6ec4726f5bda0f77e8ea63c90b",
-      "domain": "agentrouter.org",
-      "path": "/",
-      "expires": 1785669766.154695,
-      "httpOnly": true,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
       "name": "_c_WBKFRo",
       "value": "LKVO0qa1HnmOVCT1hBh8Z5gMwVuoLjoT4DTEtre4",
       "domain": ".agentrouter.org",
@@ -51,6 +41,16 @@
       "path": "/",
       "expires": -1,
       "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "acw_tc",
+      "value": "0a0f6ba617856724299688285e5090102bf9f21232bb2808c8baf947bc4e34",
+      "domain": "agentrouter.org",
+      "path": "/",
+      "expires": 1785674230.151355,
+      "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     }
