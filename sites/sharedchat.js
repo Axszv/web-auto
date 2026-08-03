@@ -1,18 +1,9 @@
-// sites/sharedchat.js °™ Uses built-in Chromium
+Ôªø// sites/sharedchat.js ‚Äî Uses msedge for better compatibility
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-function randomReason() {
-  const reasons = [
-    'Daily automation check-in for coding tool testing and usage verification',
-    'Automated daily verification for developer productivity platform access',
-    'Routine daily authentication verification and account status confirmation'
-  ];
-  return reasons[Math.floor(Math.random() * reasons.length)];
-}
+async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function loadCookies() {
   const f = path.join(__dirname, '..', 'cookies.json');
@@ -29,7 +20,15 @@ async function run(config = {}) {
   const password = config.password || process.env.SHAREDCHAT_PASSWORD || 'LZ37265981^';
   const BASE = 'https://new.sharedchat.cc';
 
-  const browser = await chromium.launch({ headless: true });
+  // Try msedge first (more compatible), fall back to built-in chromium
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, channel: 'msedge', args: ['--proxy-server=http://127.0.0.1:10808'] });
+    console.log('sharedchat: using msedge channel');
+  } catch (e) {
+    console.log('sharedchat: msedge not available, using built-in chromium');
+    browser = await chromium.launch({ headless: true, args: ['--proxy-server=http://127.0.0.1:10808'] });
+  }
   const ctx = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   });
@@ -40,62 +39,111 @@ async function run(config = {}) {
   const page = await ctx.newPage();
 
   try {
-    await page.goto(BASE + '/list/', { waitUntil: 'networkidle', timeout: 30000 });
-    await sleep(2000);
-    const url = page.url();
+    await page.goto(BASE + '/list/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await sleep(6000);
+    var url = page.url();
     console.log('sharedchat URL:', url);
 
     if (url.includes('login') || url.includes('sign')) {
-      await page.locator('span:has-text("”√ªßµ«¬º")').first().click();
-      await sleep(1000);
-      const inputs = await page.locator('input').all();
+      console.log('sharedchat: need login');
+      var inputs = await page.locator('input').all();
       if (inputs.length >= 2) {
         await inputs[0].fill(email);
         await inputs[1].fill(password);
-        await page.evaluate(() => {
-          const b = document.querySelector('button');
-          if (b && b.textContent.includes('µ«¬º')) b.click();
-        });
+        var loginBtn = page.locator('button:has-text(login), button[type=submit]');
+        if (await loginBtn.count() > 0) await loginBtn.first().click();
+        await sleep(6000);
+        console.log('sharedchat: login URL:', page.url());
       }
-      await sleep(2000);
-      console.log('Login URL:', page.url());
     } else {
-      console.log('Already logged in (cookie reused)');
+      console.log('sharedchat: already logged in (cookie reused)');
     }
 
-    // Click the claim button on page
-    const claimBtn = page.locator('button:has-text("¡Ï»° Codex »®“Ê")').first();
-    if (await claimBtn.count() > 0) {
-      await claimBtn.click();
-      await sleep(2000);
-      // Check for modal/dialog
-      const modal = page.locator('.el-dialog, .v-dialog, [role="dialog"]').first();
-      if (await modal.count() > 0) {
-        const inputs = await modal.locator('input, textarea').all();
-        if (inputs.length > 0) {
-          const reason = randomReason();
-          await inputs[0].fill(reason);
-          console.log('Filled reason');
-          const submitBtn = modal.locator('button:has-text("¡Ï»°"), button:has-text("»∑»œ"), button:has-text("»∑∂®")').first();
-          if (await submitBtn.count() > 0) {
-            await submitBtn.click();
-            await sleep(1500);
-            console.log('Claim submitted!');
+    // Listen for API responses
+    var apiLog = [];
+    page.on('response', async function(resp) {
+      var url = resp.url();
+      if (url.includes('/api/')) {
+        try {
+          var text = await resp.text();
+          apiLog.push({ url: url, status: resp.status(), body: text.substring(0, 200) });
+        } catch(e) {}
+      }
+    });
+
+    // Click claim button
+    console.log('sharedchat: clicking claim button...');
+    var claimResult = await page.evaluate(function() {
+      var btns = Array.from(document.querySelectorAll('button'));
+      var claimBtn = btns.find(function(b) { return b.textContent.trim() === 'È¢ÜÂèñ Codex ÊùÉÁõä'; });
+      if (!claimBtn) return { error: 'claim button not found' };
+      claimBtn.click();
+      return { clicked: true };
+    });
+    console.log('sharedchat claim click:', JSON.stringify(claimResult));
+
+    await sleep(3000);
+
+    // Fill reason and submit
+    console.log('sharedchat: filling reason and submitting...');
+    var modalResult = await page.evaluate(function() {
+      var ta = Array.from(document.querySelectorAll('textarea'));
+      for (var i = 0; i < ta.length; i++) {
+        if (ta[i].offsetParent !== null) {
+          var today = new Date().toISOString().slice(0, 10);
+          var reason = today + '-UseCodexDaily-' + Math.floor(Math.random() * 99999);
+          ta[i].value = reason;
+          ta[i].dispatchEvent(new Event('input', { bubbles: true }));
+          ta[i].dispatchEvent(new Event('change', { bubbles: true }));
+          // Click submit (È¢ÜÂèñ button in modal, not the page-level one)
+          var btns = Array.from(document.querySelectorAll('button'));
+          for (var j = 0; j < btns.length; j++) {
+            var t = (btns[j].textContent || '').trim();
+            if ((t === 'È¢ÜÂèñ' || t === 'Á°ÆËÆ§') && btns[j].offsetParent !== null) {
+              var rect = btns[j].getBoundingClientRect();
+              if (rect.top < 900) { btns[j].click(); return { reason: reason, submitted: true }; }
+            }
           }
+          return { reason: reason, submitted: false, error: 'no submit button in modal' };
         }
       }
+      return { error: 'no textarea found' };
+    });
+    console.log('sharedchat modal result:', JSON.stringify(modalResult));
+    await sleep(6000);
+
+    // Check API responses
+    console.log('sharedchat API responses:', JSON.stringify(apiLog));
+
+    // Check result
+    var body = await page.locator('body').innerText();
+    var hasClaimed = body.includes('Â∑≤È¢ÜÂèñ');
+    var hasExpired = body.includes('Â∑≤ËøáÊúü');
+    var claimBtnText = await page.evaluate(function() {
+      var btns = Array.from(document.querySelectorAll('button'));
+      var btn = btns.find(function(b) { return b.textContent.trim().indexOf('È¢ÜÂèñ') >= 0 && b.offsetParent !== null; });
+      return btn ? btn.textContent.trim() : 'none';
+    });
+    console.log('sharedchat: hasClaimed=' + hasClaimed + ', hasExpired=' + hasExpired + ', btnText=' + claimBtnText);
+    
+    if (hasExpired) {
+      console.log('sharedchat: WARNING - Codex plan expired! Cannot claim.');
+    } else if (hasClaimed) {
+      console.log('sharedchat: SUCCESS - claimed today!');
+    } else if (claimBtnText !== 'È¢ÜÂèñ Codex ÊùÉÁõä') {
+      console.log('sharedchat: button changed, may have been claimed');
     } else {
-      console.log('Claim button not found (already claimed today?)');
+      console.log('sharedchat: claim may have failed, button still visible');
     }
 
-    const cookies = await ctx.cookies(BASE);
+    // Save cookies
+    var cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
-      const all = await loadCookies();
+      var all = await loadCookies();
       all.sharedchat = cookies;
       await saveCookies(all);
       console.log('sharedchat cookies saved:', cookies.length);
     }
-
     console.log('All done for sharedchat.cc');
     return { success: true };
   } catch (e) {
