@@ -2,7 +2,7 @@ name: Daily Web Auto
 
 on:
   schedule:
-    - cron: '"0 1 * * *"'
+    - cron: '0 17 * * *'
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   auto:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,8 +19,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '"20"'
-          cache: '"npm"'
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -35,12 +35,14 @@ jobs:
           GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
           SHAREDCHAT_EMAIL: ${{ secrets.SHAREDCHAT_EMAIL }}
           SHAREDCHAT_PASSWORD: ${{ secrets.SHAREDCHAT_PASSWORD }}
+          AGENTROUTER_EMAIL: ${{ secrets.AGENTROUTER_EMAIL }}
+          AGENTROUTER_PASSWORD: ${{ secrets.AGENTROUTER_PASSWORD }}
 
       - name: Commit and push updated cookies
         run: |
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
+          git config user.email 'actions@github.com'
+          git config user.name 'GitHub Actions'
           git fetch origin main
           git reset --hard origin/main
           git add cookies.json
-          git diff --cached --quiet && echo "No cookie changes" || (git commit -m "chore: update session cookies [skip ci]" && git push)
+          git diff --cached --quiet && echo 'No cookie changes' || (git commit -m 'chore: update session cookies [skip ci]' && git push)
