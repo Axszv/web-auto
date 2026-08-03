@@ -1,4 +1,4 @@
-ï»¿// sites/gogocs.js â€” Uses built-in Chromium (works on all platforms)
+// sites/gogocs.js ¡ª Uses built-in Chromium
 const crypto = require('crypto');
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -80,35 +80,46 @@ async function run(config = {}) {
       console.log('Already logged in (cookie reused)');
     }
 
+    // Handle disable protection page
     if (page.url().includes('disable')) {
-      console.log('On disable page');
-      const btn = page.locator('text=å–æ¶ˆè´¦æˆ·ä¿æŠ¤').first();
-      if (await btn.count() > 0) {
-        await btn.evaluate(el => el.click());
+      console.log('On disable page, clicking cancel protection...');
+      const cancelBtn = page.locator('button:has-text("È¡ÏûÕË»§±£»¤")').first();
+      if (await cancelBtn.count() > 0) {
+        await cancelBtn.click();
         await sleep(5000);
-        const ok = page.locator('text=çŸ¥é“äº†').first();
-        if (await ok.count() > 0) await ok.evaluate(el => el.click());
+        const okBtn = page.locator('button:has-text("ÖªµÀÁË")').first();
+        if (await okBtn.count() > 0) await okBtn.click();
         await sleep(2000);
       }
     }
 
+    // Go to edit page and set group
     await page.goto(BASE + '/user/edit', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(2000);
-    const groupLabel = page.locator('text=åˆ†ç»„ ç½‘ç»œ').first();
+    console.log('Edit URL:', page.url());
+
+    // Try to find group selector - it may not exist if already set
+    const bodyText = await page.locator('body').innerText();
+    const hasGroup = bodyText.includes('\u5206\u7ec4') || bodyText.includes('\u5ef6\u8fdf');
+    console.log('Has group selector text:', hasGroup);
+
+    const groupLabel = page.locator('text=\u5206\u7ec4 \u7f51\u7edc').or(page.locator('text=\u5206\u7ec4\u7f51\u7edc')).first();
     if (await groupLabel.count() > 0) {
-      await groupLabel.evaluate(el => el.click());
+      await groupLabel.click();
       await sleep(1000);
-      const opts = await page.locator('text=å»¶è¿Ÿä¼˜å…ˆ').all();
+      const opts = await page.locator('text=\u5ef6\u8fdf\u4f18\u5148').all();
       for (const opt of opts) {
         if (await opt.isVisible().catch(() => false)) {
-          await opt.evaluate(el => el.click());
+          await opt.click();
           break;
         }
       }
       await sleep(500);
       const submit = page.locator('button[type="submit"]');
-      if (await submit.count() > 0) await submit.click();
-      console.log('Group set to å»¶è¿Ÿä¼˜å…ˆ');
+      if (await submit.count() > 0) await submit.first().click();
+      console.log('Group set to \u5ef6\u8fdf\u4f18\u5148');
+    } else {
+      console.log('Group selector not found (may already be set)');
     }
 
     const cookies = await ctx.cookies(BASE);

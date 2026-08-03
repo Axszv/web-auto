@@ -1,4 +1,4 @@
-ï»¿// sites/sharedchat.js â€” Uses built-in Chromium
+// sites/sharedchat.js ¡ª Uses built-in Chromium
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -40,13 +40,13 @@ async function run(config = {}) {
   const page = await ctx.newPage();
 
   try {
-    await page.goto(BASE + '/list/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(1500);
+    await page.goto(BASE + '/list/', { waitUntil: 'networkidle', timeout: 30000 });
+    await sleep(2000);
     const url = page.url();
     console.log('sharedchat URL:', url);
 
     if (url.includes('login') || url.includes('sign')) {
-      await page.locator('span:has-text("ç”¨æˆ·ç™»å½•")').first().click();
+      await page.locator('span:has-text("ÓÃ»§µÇÂ¼")').first().click();
       await sleep(1000);
       const inputs = await page.locator('input').all();
       if (inputs.length >= 2) {
@@ -54,7 +54,7 @@ async function run(config = {}) {
         await inputs[1].fill(password);
         await page.evaluate(() => {
           const b = document.querySelector('button');
-          if (b && b.textContent.includes('ç™»å½•')) b.click();
+          if (b && b.textContent.includes('µÇÂ¼')) b.click();
         });
       }
       await sleep(2000);
@@ -63,17 +63,30 @@ async function run(config = {}) {
       console.log('Already logged in (cookie reused)');
     }
 
-    const reason = randomReason();
-    const result = await page.evaluate(async (reason) => {
-      try {
-        const r = await fetch('/frontend-api/vibe-code/codex/claim', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason })
-        });
-        return await r.json();
-      } catch(e) { return { error: e.message }; }
-    }, reason);
-    console.log('Claim:', JSON.stringify(result));
+    // Click the claim button on page
+    const claimBtn = page.locator('button:has-text("ÁìÈ¡ Codex È¨Òæ")').first();
+    if (await claimBtn.count() > 0) {
+      await claimBtn.click();
+      await sleep(2000);
+      // Check for modal/dialog
+      const modal = page.locator('.el-dialog, .v-dialog, [role="dialog"]').first();
+      if (await modal.count() > 0) {
+        const inputs = await modal.locator('input, textarea').all();
+        if (inputs.length > 0) {
+          const reason = randomReason();
+          await inputs[0].fill(reason);
+          console.log('Filled reason');
+          const submitBtn = modal.locator('button:has-text("ÁìÈ¡"), button:has-text("È·ÈÏ"), button:has-text("È·¶¨")').first();
+          if (await submitBtn.count() > 0) {
+            await submitBtn.click();
+            await sleep(1500);
+            console.log('Claim submitted!');
+          }
+        }
+      }
+    } else {
+      console.log('Claim button not found (already claimed today?)');
+    }
 
     const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
