@@ -1,9 +1,9 @@
-// sites/agentrouter.js
+﻿// sites/agentrouter.js
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function loadCookies() {
   const f = path.join(__dirname, '..', 'cookies.json');
@@ -20,10 +20,9 @@ async function run(config = {}) {
   const email = config.email || process.env.AGENTROUTER_EMAIL || '';
   const password = config.password || process.env.AGENTROUTER_PASSWORD || '';
 
-  // Try msedge first (supports OAuth), fall back to built-in chromium
   let browser;
   try {
-    browser = await chromium.launch({ headless: true, args: ["--proxy-server=http://127.0.0.1:10808"], channel: 'msedge' });
+    browser = await chromium.launch({ headless: true, args: ['--proxy-server=http://127.0.0.1:10808'], channel: 'msedge' });
     console.log('agentrouter: using channel=msedge');
   } catch (e) {
     console.log('agentrouter: msedge not available, using built-in chromium');
@@ -41,38 +40,56 @@ async function run(config = {}) {
   const page = await ctx.newPage();
 
   try {
-    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    // Step 1: Get fresh Cloudflare cookies
+    console.log('agentrouter: getting fresh CF cookies...');
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await sleep(5000);
+    console.log('agentrouter CF passed, URL:', page.url());
+
+    // Step 2: Try console with fresh CF + saved session
+    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(3000);
     const url = page.url();
     console.log('agentrouter URL:', url);
 
     if (url.includes('login')) {
       console.log('agentrouter: session expired, attempting login...');
+      // Try OAuth via msedge
       await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
       await sleep(2000);
 
-      // Try email/password login if credentials available
+      // Check if GitHub OAuth button exists
+      const hasGithubBtn = await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        return btns.some(b => (b.textContent || '').includes('GitHub'));
+      });
+
+      if (hasGithubBtn) {
+        console.log('agentrouter: GitHub OAuth available, cannot automate. Run: node login-helper.js agentrouter');
+        return { success: false, error: 'need_manual_login' };
+      }
+
+      // Try email/password if available
       if (email && password) {
         const inputs = await page.locator('input').all();
         if (inputs.length >= 2) {
           await inputs[0].fill(email);
           await inputs[1].fill(password);
-          const btn = page.locator('button:has-text("����")').first();
+          const btn = page.locator('button:has-text("继续"), button[type=submit]');
           if (await btn.count() > 0) {
-            await btn.click();
+            await btn.first().click();
             await sleep(3000);
           }
         }
       }
 
       if (page.url().includes('login')) {
-        console.log('agentrouter: login failed. Need username/password or manual OAuth.');
-        console.log('agentrouter: run: node login-helper.js agentrouter');
+        console.log('agentrouter: login failed. Need manual OAuth.');
         return { success: false, error: 'need_manual_login' };
       }
     }
 
-    console.log('agentrouter: logged in');
+    console.log('agentrouter: logged in!');
     const cr = await page.evaluate(async () => {
       try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.text(); }
       catch(e) { return { error: e.message }; }
@@ -84,8 +101,9 @@ async function run(config = {}) {
       const all = await loadCookies();
       all.agentrouter = cookies;
       await saveCookies(all);
+      console.log('agentrouter cookies saved:', cookies.length);
     }
-    console.log('agentrouter done, cookies:', cookies.length);
+    console.log('agentrouter done');
     return { success: true };
   } catch (e) {
     console.error('agentrouter error:', e.message);
