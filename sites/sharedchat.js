@@ -1,4 +1,4 @@
-﻿// sites/sharedchat.js — Uses msedge for better compatibility
+﻿// sites/sharedchat.js
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,37 +20,70 @@ async function run(config = {}) {
   const password = config.password || process.env.SHAREDCHAT_PASSWORD || 'LZ37265981^';
   const BASE = 'https://new.sharedchat.cc';
 
-  // Try msedge first (more compatible), fall back to built-in chromium
+  // Try msedge first, fall back to built-in chromium
   let browser;
   try {
-    browser = await chromium.launch({ headless: true, channel: 'msedge', args: ['--proxy-server=http://127.0.0.1:10808'] });
+    browser = await chromium.launch({ headless: true, channel: 'msedge', args: [] });
     console.log('sharedchat: using msedge channel');
   } catch (e) {
     console.log('sharedchat: msedge not available, using built-in chromium');
-    browser = await chromium.launch({ headless: true, args: ['--proxy-server=http://127.0.0.1:10808'] });
+    browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled'] });
   }
+
   const ctx = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   });
 
+  // Clear old cookies to avoid CF blocking from expired sessions
   const saved = await loadCookies();
-  if (saved.sharedchat && saved.sharedchat.length > 0) await ctx.addCookies(saved.sharedchat);
+  if (saved.sharedchat && saved.sharedchat.length > 0) {
+    console.log('sharedchat: clearing old cookies...');
+    await ctx.clearCookies();
+  }
 
   const page = await ctx.newPage();
 
   try {
-    await page.goto(BASE + '/list/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await sleep(6000);
-    var url = page.url();
-    console.log('sharedchat URL:', url);
+    // Step 1: Visit main page without cookies to pass Cloudflare
+    console.log('sharedchat: visiting main page...');
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await sleep(10000);
+    console.log('sharedchat: main URL:', page.url());
 
+    // Step 2: Navigate to list page
+    await page.goto(BASE + '/list/', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await sleep(8000);
+    var url = page.url();
+    console.log('sharedchat: list URL:', url);
+
+    // Check if on Cloudflare page
+    const onCF = await page.evaluate(() => document.title.includes('Cloudflare'));
+    if (onCF) {
+      console.log('sharedchat: Cloudflare challenge detected');
+      const btn = page.locator('#cf-footer-ip-reveal');
+      if (await btn.count() > 0) {
+        await btn.click();
+        await sleep(8000);
+        console.log('sharedchat: after CF click, URL:', page.url());
+      }
+      if (page.url().includes('Cloudflare') || page.url().includes('checking')) {
+        console.log('sharedchat: CF block persists, need manual login');
+        return { success: false, error: 'cloudflare_block' };
+      }
+    }
+
+    // Step 3: Check if logged in
+    url = page.url();
     if (url.includes('login') || url.includes('sign')) {
       console.log('sharedchat: need login');
+      // Wait for form
+      await page.waitForSelector('input[type=\"email\"], input[type=\"text\"], input[type=\"password\"]', { timeout: 15000 }).catch(() => {});
+      await sleep(1000);
       var inputs = await page.locator('input').all();
       if (inputs.length >= 2) {
         await inputs[0].fill(email);
         await inputs[1].fill(password);
-        var loginBtn = page.locator('button:has-text(login), button[type=submit]');
+        var loginBtn = page.locator('button.el-button');
         if (await loginBtn.count() > 0) await loginBtn.first().click();
         await sleep(6000);
         console.log('sharedchat: login URL:', page.url());
@@ -59,23 +92,11 @@ async function run(config = {}) {
       console.log('sharedchat: already logged in (cookie reused)');
     }
 
-    // Listen for API responses
-    var apiLog = [];
-    page.on('response', async function(resp) {
-      var url = resp.url();
-      if (url.includes('/api/')) {
-        try {
-          var text = await resp.text();
-          apiLog.push({ url: url, status: resp.status(), body: text.substring(0, 200) });
-        } catch(e) {}
-      }
-    });
-
-    // Click claim button
-    console.log('sharedchat: clicking claim button...');
+    // Step 4: Click claim button
+    console.log('sharedchat: looking for claim button...');
     var claimResult = await page.evaluate(function() {
       var btns = Array.from(document.querySelectorAll('button'));
-      var claimBtn = btns.find(function(b) { return b.textContent.trim() === '领取 Codex 权益'; });
+      var claimBtn = btns.find(function(b) { return (b.textContent || '').trim() === '领取 Codex 权益'; });
       if (!claimBtn) return { error: 'claim button not found' };
       claimBtn.click();
       return { clicked: true };
@@ -84,8 +105,8 @@ async function run(config = {}) {
 
     await sleep(3000);
 
-    // Fill reason and submit
-    console.log('sharedchat: filling reason and submitting...');
+    // Step 5: Fill reason and submit
+    console.log('sharedchat: filling reason...');
     var modalResult = await page.evaluate(function() {
       var ta = Array.from(document.querySelectorAll('textarea'));
       for (var i = 0; i < ta.length; i++) {
@@ -95,7 +116,6 @@ async function run(config = {}) {
           ta[i].value = reason;
           ta[i].dispatchEvent(new Event('input', { bubbles: true }));
           ta[i].dispatchEvent(new Event('change', { bubbles: true }));
-          // Click submit (领取 button in modal, not the page-level one)
           var btns = Array.from(document.querySelectorAll('button'));
           for (var j = 0; j < btns.length; j++) {
             var t = (btns[j].textContent || '').trim();
@@ -112,28 +132,23 @@ async function run(config = {}) {
     console.log('sharedchat modal result:', JSON.stringify(modalResult));
     await sleep(6000);
 
-    // Check API responses
-    console.log('sharedchat API responses:', JSON.stringify(apiLog));
-
-    // Check result
+    // Step 6: Check result
     var body = await page.locator('body').innerText();
     var hasClaimed = body.includes('已领取');
     var hasExpired = body.includes('已过期');
     var claimBtnText = await page.evaluate(function() {
       var btns = Array.from(document.querySelectorAll('button'));
-      var btn = btns.find(function(b) { return b.textContent.trim().indexOf('领取') >= 0 && b.offsetParent !== null; });
+      var btn = btns.find(function(b) { return (b.textContent || '').trim().indexOf('领取') >= 0 && b.offsetParent !== null; });
       return btn ? btn.textContent.trim() : 'none';
     });
     console.log('sharedchat: hasClaimed=' + hasClaimed + ', hasExpired=' + hasExpired + ', btnText=' + claimBtnText);
-    
+
     if (hasExpired) {
-      console.log('sharedchat: WARNING - Codex plan expired! Cannot claim.');
-    } else if (hasClaimed) {
+      console.log('sharedchat: WARNING - Codex plan expired!');
+    } else if (hasClaimed || claimBtnText !== '领取 Codex 权益') {
       console.log('sharedchat: SUCCESS - claimed today!');
-    } else if (claimBtnText !== '领取 Codex 权益') {
-      console.log('sharedchat: button changed, may have been claimed');
     } else {
-      console.log('sharedchat: claim may have failed, button still visible');
+      console.log('sharedchat: claim may have failed');
     }
 
     // Save cookies
@@ -142,9 +157,9 @@ async function run(config = {}) {
       var all = await loadCookies();
       all.sharedchat = cookies;
       await saveCookies(all);
-      console.log('sharedchat cookies saved:', cookies.length);
+      console.log('sharedchat: cookies saved:', cookies.length);
     }
-    console.log('All done for sharedchat.cc');
+    console.log('sharedchat: done');
     return { success: true };
   } catch (e) {
     console.error('sharedchat Error:', e.message);

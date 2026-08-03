@@ -2,10 +2,10 @@
   "gogocs": [
     {
       "name": "sid",
-      "value": "d37bb123de9676f6609c2bf5f1f58b1d72d98534a69d95ddff834afd05781850",
+      "value": "8bd8e64a5a9db9b5406c87423aee5e09428a1db39f388f59f8b28a2ddba4c83c",
       "domain": "gogocs.xyz",
       "path": "/",
-      "expires": 1785749085.005723,
+      "expires": 1785857206.757338,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
@@ -14,10 +14,10 @@
   "sharedchat": [
     {
       "name": "share-session",
-      "value": "346bf9211c0f43e3ad165cd9d4100a87",
+      "value": "645403f30ed54ddfa9f226bf28a713b9",
       "domain": "new.sharedchat.cc",
       "path": "/",
-      "expires": 1786267236.996928,
+      "expires": 1786375645.109042,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
@@ -25,31 +25,21 @@
   ],
   "agentrouter": [
     {
-      "name": "_c_WBKFRo",
-      "value": "LKVO0qa1HnmOVCT1hBh8Z5gMwVuoLjoT4DTEtre4",
-      "domain": ".agentrouter.org",
+      "name": "session",
+      "value": "MTc4NDk2NjIxMXxEWDhFQVFMX2dBQUJFQUVRQUFELUFVVF9nQUFHQm5OMGNtbHVad3dOQUF0dllYVjBhRjl6ZEdGMFpRWnpkSEpwYm1jTV80c0FfNGhsZVVwMVNXcHZhVlF3ZUdwUmEyZDVVVzFTYW1WRmJFMUphWGRwWWxOSk5rbHRlSFphTW14MVNXbDNhV1JUU1RaTlEzZHBXbE5KTmsxVVl6Uk9SR3N5VG1wbmQwOUlNQzVpTVRnNE1qRXlNelEzTXpkaU1XVTFOakJtTmpRMFpUWTVPV1E0T1daaU4ySXpNemd6WldJd01UUXhOMlkwTnpreU5HSXdOV0poTnpOallUVmtabU13Qm5OMGNtbHVad3dFQUFKcFpBTnBiblFFQlFEOUJJcllCbk4wY21sdVp3d0tBQWgxYzJWeWJtRnRaUVp6ZEhKcGJtY01Ed0FOWjJsMGFIVmlYekUwT0RnME5BWnpkSEpwYm1jTUJnQUVjbTlzWlFOcGJuUUVBZ0FDQm5OMGNtbHVad3dJQUFaemRHRjBkWE1EYVc1MEJBSUFBZ1p6ZEhKcGJtY01Cd0FGWjNKdmRYQUdjM1J5YVc1bkRBa0FCMlJsWm1GMWJIUT18PVf-a_5Ng0wbmrfd02F1CuArplbYMuOKMZFGrNwsAOM=",
+      "domain": "agentrouter.org",
       "path": "/",
-      "expires": 1817205243,
-      "httpOnly": false,
+      "expires": 1788249958.09004,
+      "httpOnly": true,
       "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "_nb_ioWEgULi",
-      "value": "",
-      "domain": ".agentrouter.org",
-      "path": "/",
-      "expires": -1,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
+      "sameSite": "Strict"
     },
     {
       "name": "acw_tc",
-      "value": "0a0f6ba617856817960231234e509667316d4ac81486153c20318dea98d32e",
+      "value": "0a0f6bdf17857653449322192e72e88904db79c47ba5618ed957a6c8228d17",
       "domain": "agentrouter.org",
       "path": "/",
-      "expires": 1785683596.192184,
+      "expires": 1785767144.790523,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
@@ -57,44 +47,44 @@
   ],
   "anyrouter": [
     {
-      "name": "acw_tc",
-      "value": "a3b5839817856699564735880ebda025c8935c11cc18477d6ef4eb2f52",
+      "name": "session",
+      "value": "MTc4NTY1Nzk1OXxEWDhFQVFMX2dBQUJFQUVRQUFEX3hfLUFBQVlHYzNSeWFXNW5EQVlBQkhKdmJHVURhVzUwQkFJQUFnWnpkSEpwYm1jTUNBQUdjM1JoZEhWekEybHVkQVFDQUFJR2MzUnlhVzVuREFjQUJXZHliM1Z3Qm5OMGNtbHVad3dKQUFka1pXWmhkV3gwQm5OMGNtbHVad3dOQUF0dllYVjBhRjl6ZEdGMFpRWnpkSEpwYm1jTURnQU1VMU5QVW5oaGQxVTBSR3BTQm5OMGNtbHVad3dFQUFKcFpBTnBiblFFQlFEOUJhU3FCbk4wY21sdVp3d0tBQWgxYzJWeWJtRnRaUVp6ZEhKcGJtY01FQUFPYkdsdWRYaGtiMTh4T0RRNU1UYz18UAKIbIvTO-6nDR4sL_8GV7ve2wjbvtnIXTJIZgQmJuk=",
       "domain": "anyrouter.top",
       "path": "/",
-      "expires": 1785673555.045456,
+      "expires": 1788249958.09004,
       "httpOnly": true,
       "secure": false,
-      "sameSite": "Lax"
+      "sameSite": "Strict"
     },
     {
-      "name": "cdn_sec_tc",
-      "value": "a3b5839817856699564735880ebda025c8935c11cc18477d6ef4eb2f52",
+      "name": "acw_tc",
+      "value": "9b66b4ad17857654671464781e0a75c8a1483298862b5459741d0e1277",
       "domain": "anyrouter.top",
       "path": "/",
-      "expires": 1785673555.04562,
+      "expires": 1785769066.95659,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "acw_sc__v2",
-      "value": "6a6f29441862b815f635f914fbbc3d08fe4a7170",
+      "value": "6a709e5b0d268b0ba75917427a0e9cb5847c370d",
       "domain": "anyrouter.top",
       "path": "/",
-      "expires": 1785673555.102354,
-      "httpOnly": false,
+      "expires": 1785769066.95659,
+      "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     },
     {
-      "name": "session",
-      "value": "MTc4NTY2ODAyMnxEWDhFQVFMX2dBQUJFQUVRQUFBeF80QUFBUVp6ZEhKcGJtY01EUUFMYjJGMWRHaGZjM1JoZEdVR2MzUnlhVzVuREE0QURHcE9hVVF3ZUZZelZXcEhiUT09fBcsVQLpmeEPOBbitU_iP8S6TkdxI3Dx7IOUMTTtu6SY",
+      "name": "cdn_sec_tc",
+      "value": "9b66b4ad17857654671464781e0a75c8a1483298862b5459741d0e1277",
       "domain": "anyrouter.top",
       "path": "/",
-      "expires": 1788260021.152992,
+      "expires": 1785769066.95659,
       "httpOnly": true,
       "secure": false,
-      "sameSite": "Strict"
+      "sameSite": "Lax"
     }
   ]
 }
