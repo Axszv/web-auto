@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 .cache/
 logs/
 js/
@@ -7,3 +7,5 @@ config/
 scripts/
 *.log
 .env
+_inspect*.js
+_test_*.js
