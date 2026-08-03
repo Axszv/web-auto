@@ -1,10 +1,14 @@
-﻿const fs = require('fs');
+﻿process.env.HTTP_PROXY = 'http://127.0.0.1:10808';
+process.env.HTTPS_PROXY = 'http://127.0.0.1:10808';
+process.env.ALL_PROXY = 'socks5://127.0.0.1:10808';
+
+const fs = require('fs');
 const path = require('path');
 
 const COOKIE_FILE = path.join(__dirname, 'cookies.json');
 const LOG_DIR = path.join(__dirname, 'logs');
 
-async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function loadCookies() {
   if (fs.existsSync(COOKIE_FILE)) {

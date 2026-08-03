@@ -1,7 +1,7 @@
-const { chromium } = require('playwright');
+﻿const { chromium } = require('playwright');
 const fs = require('fs');
 
-async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 const site = process.argv[2];
 if (!site) { console.log('Usage: node login-helper.js <agentrouter|anyrouter>'); process.exit(1); }
@@ -15,7 +15,7 @@ const key = site;
   console.log('Please complete login (OAuth or username/password).');
   console.log('This window will close automatically after login.\n');
 
-  const browser = await chromium.launch({ headless: false, channel: 'msedge' });
+  const browser = await chromium.launch({ headless: false, channel: 'msedge', args: ['--proxy-server=http://127.0.0.1:10808'] });
   const ctx = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 }
@@ -24,10 +24,9 @@ const key = site;
   const page = await ctx.newPage();
 
   if (site === 'anyrouter') {
-    // anyrouter: bypass CF, then open GitHub OAuth
     console.log('1. Bypassing Cloudflare...');
-    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 30000 });
-    await sleep(3000);
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await sleep(8000);
     console.log('   CF passed, URL:', page.url());
 
     console.log('2. Opening GitHub OAuth...');
@@ -37,44 +36,32 @@ const key = site;
     });
     await sleep(5000);
   } else {
-    // agentrouter: go to login page
     console.log('1. Opening login page...');
-    await page.goto(BASE + '/login', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
     console.log('   Page loaded. Please login now.');
   }
 
   console.log('\n2. Please complete login in the browser window...');
   console.log('   (If already logged into GitHub, it will auto-authorize)\n');
 
-  // Wait for login by polling URL
+  // Wait for login
   let loggedIN = false;
-  for (let i = 0; i < 300; i++) {
+  while (!loggedIN) {
     await sleep(2000);
-    const pages = ctx.pages();
-    for (const p of pages) {
-      const url = p.url();
-      if (!url.includes('login') && !url.includes('oauth') && !url.includes('github.com') && !url.includes('authorize')) {
-        console.log('   Login detected! URL:', url);
-        loggedIN = true;
-        break;
-      }
+    const url = page.url();
+    if (!url.includes('login') && !url.includes('oauth') && !url.includes('github.com') && !url.includes('authorize')) {
+      console.log('   Login detected! URL:', url);
+      loggedIN = true;
     }
-    if (loggedIN) break;
-    if (i % 5 === 0) console.log('   Waiting... ' + (i * 2) + 's elapsed');
   }
 
-  if (!loggedIN) {
-    console.log('   Timeout. Please ensure you completed login/authorization.');
-  }
-
-  // Navigate to console and verify
-  await page.goto(BASE + '/console/personal', { waitUntil: 'networkidle', timeout: 30000 });
+  // Navigate to console
+  await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 30000 });
   await sleep(2000);
   console.log('Console URL:', page.url());
   console.log('Title:', await page.title());
 
   if (!page.url().includes('login')) {
-    // Do checkin
     try {
       const cr = await page.evaluate(async () => {
         try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }

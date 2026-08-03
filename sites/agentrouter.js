@@ -1,4 +1,4 @@
-﻿// sites/agentrouter.js
+// sites/agentrouter.js
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -15,22 +15,21 @@ async function saveCookies(data) {
   fs.writeFileSync(path.join(__dirname, '..', 'cookies.json'), JSON.stringify(data, null, 2), 'utf8');
 }
 
-async function launchBrowser() {
-  const channels = ['msedge', 'chrome'];
-  for (const ch of channels) {
-    try {
-      const b = await chromium.launch({ headless: true, channel: ch });
-      console.log('agentrouter: using channel=' + ch);
-      return b;
-    } catch (e) { /* try next */ }
-  }
-  console.log('agentrouter: using built-in chromium');
-  return await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled'] });
-}
-
 async function run(config = {}) {
   const BASE = 'https://agentrouter.org';
-  const browser = await launchBrowser();
+  const email = config.email || process.env.AGENTROUTER_EMAIL || '';
+  const password = config.password || process.env.AGENTROUTER_PASSWORD || '';
+
+  // Try msedge first (supports OAuth), fall back to built-in chromium
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, args: ["--proxy-server=http://127.0.0.1:10808"], channel: 'msedge' });
+    console.log('agentrouter: using channel=msedge');
+  } catch (e) {
+    console.log('agentrouter: msedge not available, using built-in chromium');
+    browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled'] });
+  }
+
   const ctx = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 }
@@ -42,34 +41,43 @@ async function run(config = {}) {
   const page = await ctx.newPage();
 
   try {
-    await page.goto(BASE + '/console/personal', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 120000 });
     await sleep(3000);
     const url = page.url();
     console.log('agentrouter URL:', url);
 
     if (url.includes('login')) {
-      await page.goto(BASE + '/login', { waitUntil: 'networkidle', timeout: 30000 });
+      console.log('agentrouter: session expired, attempting login...');
+      await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
       await sleep(2000);
-      const inputs = await page.locator('input').all();
-      const token = config.token || '';
-      if (token && inputs.length >= 2) {
-        await inputs[0].fill(token);
-        await inputs[1].fill('');
-        await page.evaluate(() => { const b = document.querySelector('button[type="submit"]'); if(b) b.click(); });
-        await sleep(3000);
+
+      // Try email/password login if credentials available
+      if (email && password) {
+        const inputs = await page.locator('input').all();
+        if (inputs.length >= 2) {
+          await inputs[0].fill(email);
+          await inputs[1].fill(password);
+          const btn = page.locator('button:has-text("����")').first();
+          if (await btn.count() > 0) {
+            await btn.click();
+            await sleep(3000);
+          }
+        }
       }
+
       if (page.url().includes('login')) {
-        console.log('agentrouter: need username/password (token invalid).');
+        console.log('agentrouter: login failed. Need username/password or manual OAuth.');
+        console.log('agentrouter: run: node login-helper.js agentrouter');
         return { success: false, error: 'need_manual_login' };
       }
     }
 
     console.log('agentrouter: logged in');
     const cr = await page.evaluate(async () => {
-      try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
+      try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.text(); }
       catch(e) { return { error: e.message }; }
     });
-    console.log('agentrouter checkin:', JSON.stringify(cr));
+    console.log('agentrouter checkin:', cr);
 
     const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
