@@ -1,4 +1,4 @@
-﻿// sites/anyrouter.js — GitHub OAuth with CF bypass via context route
+// sites/anyrouter.js - GitHub OAuth with CF bypass via regex route
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -17,131 +17,102 @@ async function saveCookies(data) {
 
 async function run(config = {}) {
   const BASE = 'https://anyrouter.top';
-  const useProxy = process.env.HTTP_PROXY || process.env.all_proxy || '';
+  const useProxy = process.env.HTTP_PROXY || process.env.ALL_PROXY || '';
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: useProxy
-      ? ['--proxy-server=' + useProxy, '--disable-blink-features=AutomationControlled', '--disable-popup-blocking', '--ignore-certificate-errors']
-      : ['--disable-blink-features=AutomationControlled', '--disable-popup-blocking']
-  });
+  const launchArgs = ['--disable-blink-features=AutomationControlled', '--disable-popup-blocking'];
+  if (useProxy) launchArgs.unshift('--proxy-server=' + useProxy);
+
+  const browser = await chromium.launch({ headless: true, args: launchArgs });
   const ctx = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 }
   });
 
-  // Clear old expired cookies
   const saved = await loadCookies();
   if (saved.anyrouter && saved.anyrouter.length > 0) {
-    console.log('anyrouter: clearing old expired cookies...');
-    await ctx.clearCookies();
+    const now = Date.now() / 1000;
+    const valid = saved.anyrouter.filter(c => !c.expires || c.expires > now);
+    if (valid.length > 0) {
+      console.log('anyrouter: loading', valid.length, 'valid cookies');
+      await ctx.addCookies(valid);
+    } else {
+      console.log('anyrouter: all cookies expired');
+    }
   }
 
-  // Context-level route to bypass CF on /api/status
-  await ctx.route('**/api/status', route => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          github_oauth: true,
-          linuxdo_oauth: true,
-          github_client_id: 'Ov23lidtiR4LeVZvVRNL',
-          linuxdo_client_id: 'KZUecGfhhDZMVnv8UtEdhOhf9sNOhqVX',
-          wechat_login: false,
-          telegram_oauth: false,
-          oidc_enabled: false,
-          announcements: [],
-          announcements_enabled: false,
-          system_name: 'Any Router',
-          setup: true
-        },
-        success: true
-      })
-    });
-  });
-  await ctx.route('**/api/notice', route => {
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], success: true }) });
+  // Use regex route to bypass Cloudflare API blocking
+  await ctx.route(/.*api.*/, route => {
+    const url = route.request().url();
+    if (url.includes('/api/status')) {
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          data: { github_oauth: true, github_client_id: 'Ov23lidtiR4LeVZvVRNL', linuxdo_oauth: true, system_name: 'Any Router', setup: true },
+          success: true
+        })
+      });
+    } else if (url.includes('/api/oauth/state')) {
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ data: 'auto_generated_state', success: true })
+      });
+    } else if (url.includes('/api/notice')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], success: true }) });
+    } else {
+      route.continue();
+    }
   });
 
   const page = await ctx.newPage();
 
   try {
-    // Step 1: Visit main page to pass Cloudflare
     console.log('anyrouter: visiting main page...');
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 120000 });
     await sleep(15000);
-    console.log('anyrouter: main page URL:', page.url());
+    console.log('anyrouter: main URL:', page.url());
 
-    // Step 2: Navigate to login
-    console.log('anyrouter: going to login...');
-    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 120000 });
-    await sleep(8000);
-    console.log('anyrouter: login URL:', page.url());
+    // Get OAuth state and navigate to GitHub
+    const state = await page.evaluate(async () => {
+      const r = await fetch('/api/oauth/state?mode=login&provider=github', { credentials: 'include' });
+      const d = await r.json();
+      return d.data;
+    });
+    console.log('anyrouter: OAuth state obtained');
 
-    // Close announcement
-    const closeBtn = page.locator('button:has-text(\"关闭公告\")');
-    if (await closeBtn.count() > 0) await closeBtn.first().click();
-    await sleep(2000);
+    const githubUrl = 'https://github.com/login/oauth/authorize?client_id=Ov23lidtiR4LeVZvVRNL&redirect_uri=https://anyrouter.top/oauth/github&state=' + state + '&scope=read:user';
+    console.log('anyrouter: navigating to GitHub OAuth...');
+    await page.goto(githubUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-    // Step 3: Check if already logged in
-    if (!page.url().includes('login')) {
-      console.log('anyrouter: already logged in!');
-    } else {
-      // Step 4: Use GitHub OAuth
-      console.log('anyrouter: using GitHub OAuth...');
-      
-      // Reload to ensure status API is called with mock
-      await page.reload({ waitUntil: 'domcontentloaded', timeout: 120000 });
-      await sleep(8000);
-      
-      // Click GitHub OAuth button
-      const hasGitHubBtn = await page.evaluate(() => {
-        const btns = Array.from(document.querySelectorAll('button'));
-        return btns.some(b => (b.textContent || '').includes('GitHub'));
-      });
-
-      if (hasGitHubBtn) {
-        console.log('anyrouter: GitHub button found, clicking...');
-        await page.evaluate(() => {
-          const btns = Array.from(document.querySelectorAll('button'));
-          for (const b of btns) {
-            if ((b.textContent || '').includes('GitHub')) {
-              b.click();
-              return;
-            }
-          }
-        });
-        await sleep(5000);
-        console.log('anyrouter: OAuth initiated, URL:', page.url());
-        
-        // Check for new pages (popup)
-        const pages = ctx.pages();
-        for (const p of pages) {
-          if (p !== page) {
-            console.log('anyrouter: popup URL:', p.url());
-          }
-        }
-      } else {
-        console.log('anyrouter: GitHub button not found');
-        const btns = await page.evaluate(() => 
-          Array.from(document.querySelectorAll('button')).map(b => b.textContent.trim()).filter(t => t.length > 0)
-        );
-        console.log('anyrouter: buttons:', JSON.stringify(btns));
+    // Wait for OAuth redirect
+    console.log('anyrouter: waiting for login (10 min timeout)...');
+    let logged = false;
+    for (let i = 0; i < 120; i++) {
+      await sleep(5000);
+      const url = page.url();
+      if (url.includes('anyrouter.top') && !url.includes('login') && !url.includes('oauth') && !url.includes('github.com')) {
+        console.log('anyrouter: login detected!');
+        logged = true;
+        break;
       }
     }
 
-    // Step 5: Try checkin if logged in
-    if (!page.url().includes('login')) {
-      console.log('anyrouter: checking in...');
-      const cr = await page.evaluate(async () => {
-        try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
-        catch(e) { return { error: e.message }; }
-      });
-      console.log('anyrouter: checkin:', JSON.stringify(cr));
+    if (!logged) {
+      console.log('anyrouter: OAuth timeout. Run: node login-helper.js anyrouter');
+      return { success: false, error: 'oauth_timeout' };
     }
 
-    // Step 6: Save cookies
+    // Check in
+    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(3000);
+    console.log('anyrouter: console URL:', page.url());
+
+    const cr = await page.evaluate(async () => {
+      try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
+      catch (e) { return { error: e.message }; }
+    });
+    console.log('anyrouter: checkin:', JSON.stringify(cr));
+
+    // Save cookies
     const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
       const all = await loadCookies();
@@ -150,7 +121,7 @@ async function run(config = {}) {
       console.log('anyrouter: cookies saved:', cookies.length);
     }
     console.log('anyrouter: done');
-    return { success: true };
+    return { success: true, checkin: cr };
   } catch (e) {
     console.error('anyrouter error:', e.message);
     return { success: false, error: e.message };
