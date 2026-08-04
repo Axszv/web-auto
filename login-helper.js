@@ -1,24 +1,31 @@
-﻿var fs = require('fs');
+// login-helper.js - Manual login helper for agentrouter/anyrouter (GitHub OAuth)
+var fs = require('fs');
 var p = require('playwright').chromium;
-var profileDir = fs.readFileSync('I:/Codex/web auto/_temp_profile.txt', 'utf8').trim();
-
-async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+var os = require('os');
+var path = require('path');
 
 const site = process.argv[2];
 if (!site) { console.log('Usage: node login-helper.js <agentrouter|anyrouter>'); process.exit(1); }
 
+var profileDir = path.join(os.tmpdir(), 'webauto_' + site + '_' + Date.now());
+fs.mkdirSync(profileDir, { recursive: true });
+
 const BASE = site === 'agentrouter' ? 'https://agentrouter.org' : 'https://anyrouter.top';
 const key = site;
+
+async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 (async () => {
   console.log('=== ' + site.toUpperCase() + ' Manual Login ===');
   console.log('Profile:', profileDir);
+  console.log('Proxy:', process.env.HTTP_PROXY || 'none');
   console.log('Opening ' + BASE + ' in browser...\n');
 
+  const proxyArg = process.env.HTTP_PROXY ? ['--proxy-server=' + process.env.HTTP_PROXY] : [];
   const ctx = await p.launchPersistentContext(profileDir, {
     headless: false,
     channel: 'msedge',
-    args: ['--proxy-server=http://127.0.0.1:10808'],
+    args: [...proxyArg, '--disable-blink-features=AutomationControlled'],
     viewport: { width: 1920, height: 1080 }
   });
   const page = ctx.pages()[0] || await ctx.newPage();
@@ -26,13 +33,13 @@ const key = site;
   if (site === 'anyrouter') {
     console.log('1. Bypassing Cloudflare...');
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 120000 });
-    await sleep(10000);
+    await sleep(12000);
     console.log('   CF passed, URL:', page.url());
     var isLoggedIn = await page.evaluate(function() {
       return window.location.href.indexOf('login') < 0 && window.location.href.indexOf('oauth') < 0;
     });
     if (!isLoggedIn) {
-      console.log('2. Clicking GitHub...');
+      console.log('2. Clicking GitHub OAuth...');
       await page.evaluate(function() {
         var btns = Array.from(document.querySelectorAll('button'));
         var btn = btns.find(function(b) { return (b.textContent || '').indexOf('GitHub') >= 0; });
@@ -46,7 +53,7 @@ const key = site;
     console.log('   Page loaded.');
   }
 
-  console.log('\nPlease complete login in the browser window...\n');
+  console.log('\nPlease complete login (GitHub OAuth) in the browser window...\n');
 
   let loggedIN = false;
   while (!loggedIN) {
@@ -75,7 +82,8 @@ const key = site;
 
   const cookies = await ctx.cookies(BASE);
   if (cookies.length > 0) {
-    const all = JSON.parse(fs.readFileSync('I:/Codex/web auto/cookies.json', 'utf8'));
+    let all = {};
+    try { all = JSON.parse(fs.readFileSync('I:/Codex/web auto/cookies.json', 'utf8')); } catch(e) {}
     all[key] = cookies;
     fs.writeFileSync('I:/Codex/web auto/cookies.json', JSON.stringify(all, null, 2), 'utf8');
     console.log('\nCookies saved:', cookies.length, 'for', key);
@@ -85,5 +93,6 @@ const key = site;
 
   await sleep(2000);
   await ctx.close();
+  try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch(e) {}
   console.log('\nDone! Now run: node auto.js');
 })();

@@ -2,7 +2,7 @@ name: Daily Web Auto
 
 on:
   schedule:
-    - cron: '0 19 * * *'
+    - cron: '0 21 * * *'
   workflow_dispatch:
 
 permissions:
@@ -35,8 +35,6 @@ jobs:
           GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
           SHAREDCHAT_EMAIL: ${{ secrets.SHAREDCHAT_EMAIL }}
           SHAREDCHAT_PASSWORD: ${{ secrets.SHAREDCHAT_PASSWORD }}
-          AGENTROUTER_EMAIL: ${{ secrets.AGENTROUTER_EMAIL }}
-          AGENTROUTER_PASSWORD: ${{ secrets.AGENTROUTER_PASSWORD }}
 
       - name: Commit and push updated cookies
         run: |

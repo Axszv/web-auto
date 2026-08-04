@@ -1,4 +1,4 @@
-﻿// sites/agentrouter.js — GitHub OAuth login + checkin
+// sites/agentrouter.js - GitHub OAuth login + checkin
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -17,9 +17,7 @@ async function saveCookies(data) {
 
 async function run(config = {}) {
   const BASE = 'https://agentrouter.org';
-  const email = config.email || process.env.AGENTROUTER_EMAIL || '';
-  const password = config.password || process.env.AGENTROUTER_PASSWORD || '';
-  const useProxy = process.env.HTTP_PROXY || process.env.all_proxy || '';
+  const useProxy = process.env.HTTP_PROXY || process.env.ALL_PROXY || '';
 
   const launchArgs = ['--disable-blink-features=AutomationControlled', '--disable-popup-blocking'];
   if (useProxy) launchArgs.unshift('--proxy-server=' + useProxy);
@@ -32,100 +30,97 @@ async function run(config = {}) {
   });
 
   const saved = await loadCookies();
-  if (saved.agentrouter && saved.agentrouter.length > 0) await ctx.addCookies(saved.agentrouter);
+  if (saved.agentrouter && saved.agentrouter.length > 0) {
+    console.log('agentrouter: loading saved session cookies...');
+    await ctx.addCookies(saved.agentrouter);
+  }
+
+  // Mock APIs for OAuth flow
+  await ctx.route(/.*api.*/, route => {
+    const url = route.request().url();
+    if (url.includes('/api/status')) {
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          data: { github_oauth: true, github_client_id: 'Ov23lidtiR4LeVZvVRNL', linuxdo_oauth: true, system_name: 'Agent Router', setup: true },
+          success: true
+        })
+      });
+    } else if (url.includes('/api/oauth/state')) {
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ data: 'auto_generated_state', success: true })
+      });
+    } else if (url.includes('/api/notice')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], success: true }) });
+    } else {
+      route.continue();
+    }
+  });
 
   const page = await ctx.newPage();
 
   try {
-    // Step 1: Pass Cloudflare
-    console.log('agentrouter: passing Cloudflare...');
+    console.log('agentrouter: visiting main page...');
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
-    console.log('agentrouter: CF passed, URL:', page.url());
+    console.log('agentrouter: URL:', page.url());
 
-    // Step 2: Try console with saved session
-    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await sleep(3000);
-    let url = page.url();
-    console.log('agentrouter: console URL:', url);
-
-    if (!url.includes('login')) {
+    // Check if already logged in
+    if (!page.url().includes('login')) {
       console.log('agentrouter: already logged in!');
     } else {
-      // Step 3: Get OAuth config and navigate to GitHub
+      // Get OAuth state and navigate to GitHub
       console.log('agentrouter: session expired, using GitHub OAuth...');
       await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
       await sleep(3000);
-      await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
-      await sleep(3000);
-
-      const clientId = await page.evaluate(async () => {
-        const r = await fetch('/api/status', { credentials: 'include' });
-        const data = await r.json();
-        return data.data.github_client_id;
-      });
 
       const state = await page.evaluate(async () => {
         const r = await fetch('/api/oauth/state?mode=login&provider=github', { credentials: 'include' });
-        const data = await r.json();
-        return data.data;
+        const d = await r.json();
+        return d.data;
       });
-
-      console.log('agentrouter: GitHub client_id:', clientId);
       console.log('agentrouter: OAuth state obtained');
 
-      const redirectUri = BASE + '/oauth/github';
-      const githubUrl = 'https://github.com/login/oauth/authorize?client_id=' + clientId + '&redirect_uri=' + encodeURIComponent(redirectUri) + '&state=' + state + '&scope=user:email';
-      console.log('agentrouter: opening GitHub OAuth...');
+      const githubUrl = 'https://github.com/login/oauth/authorize?client_id=Ov23lidtiR4LeVZvVRNL&redirect_uri=https://agentrouter.org/oauth/github&state=' + state + '&scope=user:email';
+      console.log('agentrouter: navigating to GitHub OAuth...');
+      await page.goto(githubUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-      try {
-        const oauthPage = await ctx.newPage();
-        await oauthPage.goto(githubUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await sleep(3000);
-        console.log('agentrouter: GitHub OAuth URL:', oauthPage.url());
-        console.log('agentrouter: Please complete GitHub login in the browser window.');
-
-        // Wait for redirect back to agentrouter
-        let logged = false;
-        for (let i = 0; i < 120; i++) {
-          await sleep(5000);
-          const curUrl = oauthPage.url();
-          if (curUrl.includes('agentrouter.org') && !curUrl.includes('login') && !curUrl.includes('oauth')) {
-            console.log('agentrouter: OAuth complete!');
-            logged = true;
-            break;
-          }
+      // Wait for OAuth redirect
+      console.log('agentrouter: waiting for login (10 min timeout)...');
+      let logged = false;
+      for (let i = 0; i < 120; i++) {
+        await sleep(5000);
+        const url = page.url();
+        if (url.includes('agentrouter.org') && !url.includes('login') && !url.includes('oauth') && !url.includes('github.com')) {
+          console.log('agentrouter: login detected!');
+          logged = true;
+          break;
         }
+      }
 
-        if (!logged) {
-          console.log('agentrouter: OAuth timeout. Cookies may need manual refresh.');
-          return { success: false, error: 'oauth_timeout' };
-        }
-
-        // Save cookies from OAuth page
-        const cookies = await oauthPage.context().cookies(BASE);
-        if (cookies.length > 0) {
-          const all = await loadCookies();
-          all.agentrouter = cookies;
-          await saveCookies(all);
-          console.log('agentrouter: cookies saved:', cookies.length);
-        }
-      } catch (oauthErr) {
-        console.log('agentrouter: GitHub OAuth navigation failed (likely proxy SSL error):', oauthErr.message);
-        console.log('agentrouter: On GitHub Actions (no proxy), this should work. Manual login recommended for now.');
-        return { success: false, error: 'oauth_ssl_error' };
+      if (!logged) {
+        console.log('agentrouter: OAuth timeout. Run: node login-helper.js agentrouter');
+        return { success: false, error: 'oauth_timeout' };
       }
     }
 
-    // Step 4: Check in
-    console.log('agentrouter: checking in...');
+    // Check in
+    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(3000);
+    console.log('agentrouter: console URL:', page.url());
+
+    const body = await page.locator('body').innerText();
+    const hasBalance = body.includes('当前余额') || body.includes('余额');
+    console.log('agentrouter: balance found:', hasBalance);
+
     const cr = await page.evaluate(async () => {
       try {
-        const r = await fetch('/api/user/checkin', { method: 'POST' });
+        const r = await fetch('/api/user/checkin', { method: 'GET', credentials: 'include' });
         return await r.json();
-      } catch(e) { return { error: e.message }; }
+      } catch (e) { return { error: e.message }; }
     });
-    console.log('agentrouter: checkin result:', JSON.stringify(cr));
+    console.log('agentrouter: checkin:', JSON.stringify(cr));
 
     // Save cookies
     const cookies = await ctx.cookies(BASE);
