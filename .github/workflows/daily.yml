@@ -2,7 +2,7 @@ name: Daily Web Auto
 
 on:
   schedule:
-    - cron: '0 21 * * *'
+    - cron: '17 19 * * *'
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
         run: npm ci
 
       - name: Install Playwright Chromium
-        run: npx playwright install chromium
+        run: npx playwright install chromium --playwright-dir ./node_modules/.cache/playwright
 
       - name: Run automation
         run: node auto.js
