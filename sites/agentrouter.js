@@ -67,8 +67,10 @@ async function run(config = {}) {
     console.log('agentrouter: logged in');
     let cr = { error: 'no response' };
     try {
+      const cookies = await ctx.cookies(BASE);
+      const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
       const resp = await page.request.post(BASE + '/api/user/checkin', {
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Cookie': cookieStr, 'Accept': 'application/json', 'Referer': BASE + '/console/personal' }
       });
       const text = await resp.text();
       console.log('agentrouter checkin status:', resp.status());

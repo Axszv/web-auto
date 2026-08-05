@@ -66,8 +66,11 @@ async function run(config = {}) {
     const reason = randomReason();
     let result = { error: 'no response' };
     try {
+      const cookies = await ctx.cookies(BASE);
+      const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
       const resp = await page.request.post(BASE + '/frontend-api/vibe-code/codex/claim', {
-        data: { reason }
+        data: { reason },
+        headers: { 'Cookie': cookieStr, 'Content-Type': 'application/json', 'Accept': 'application/json', 'Referer': BASE + '/list/' }
       });
       console.log('sharedchat claim status:', resp.status());
       try { result = await resp.json(); } catch(e) { const body = await resp.text(); console.log('sharedchat claim body:', body.substring(0, 300)); result = { error: 'not json: ' + body.substring(0, 100) }; }
