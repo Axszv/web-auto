@@ -67,7 +67,12 @@ async function run(config = {}) {
     const result = await page.evaluate(async (reason) => {
       try {
         const r = await fetch('/frontend-api/vibe-code/codex/claim', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Referer': 'https://new.sharedchat.cc/list/'
+          },
           body: JSON.stringify({ reason })
         });
         return await r.json();
@@ -95,3 +100,4 @@ async function run(config = {}) {
 }
 
 module.exports = { run };
+
