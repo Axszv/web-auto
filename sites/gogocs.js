@@ -87,7 +87,7 @@ async function run(config = {}) {
         await btn.evaluate(el => el.click({force:true}));
         await sleep(5000);
         const ok = page.locator('text=知道了').first();
-        if (await ok.count() > 0) await ok.evaluate(el => el.click({force:true});
+        if (await ok.count() > 0) await ok.evaluate(el => el.click({force:true}));
         await sleep(2000);
       }
     }
