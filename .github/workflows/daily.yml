@@ -38,8 +38,8 @@ jobs:
 
       - name: Commit and push updated cookies
         run: |
-          git config user.email 'actions@github.com'
-          git config user.name 'GitHub Actions'
+          git config user.email '504740633@qq.com'
+          git config user.name 'Axszv'
           git fetch origin main
           git reset --hard origin/main
           git add cookies.json
