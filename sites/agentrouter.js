@@ -65,13 +65,15 @@ async function run(config = {}) {
     }
 
     console.log('agentrouter: logged in');
-    const cr = await page.evaluate(async () => {
-      try { const r = await fetch('/api/user/checkin', {
-          method: 'POST',
-          headers: { 'Accept': 'application/json', 'Referer': 'https://agentrouter.org/console/personal' }
-        }); return await r.json(); }
-      catch(e) { return { error: e.message }; }
-    });
+    let cr = { error: 'no response' };
+    try {
+      const resp = await page.request.post(BASE + '/api/user/checkin', {
+        headers: { 'Accept': 'application/json' }
+      });
+      const text = await resp.text();
+      console.log('agentrouter checkin status:', resp.status());
+      cr = JSON.parse(text);
+    } catch(e) { cr = { error: e.message }; }
     console.log('agentrouter checkin:', JSON.stringify(cr));
 
     const cookies = await ctx.cookies(BASE);
