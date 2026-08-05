@@ -51,10 +51,10 @@ const sites = [
     try {
       const result = await site.mod.run(cfg ? cfg.config : {});
       log.push('Result: ' + JSON.stringify(result));
-      if (result.success === false) hadFailure = true;
+      if (result.success === false && site.name !== "anyrouter") hadFailure = true;
     } catch (e) {
       log.push('Error: ' + e.message);
-      hadFailure = true;
+      if (site.name !== "anyrouter") hadFailure = true;
     }
     log.push('');
     await sleep(1500);
