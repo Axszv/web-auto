@@ -21,7 +21,7 @@ async function run(config = {}) {
 
   const launchArgs = ['--disable-blink-features=AutomationControlled', '--disable-popup-blocking'];
   if (useProxy) launchArgs.unshift('--proxy-server=' + useProxy);
-  launchArgs.push('--ignore-certificate-errors');
+  
 
   const browser = await chromium.launch({ headless: true, args: launchArgs });
   const ctx = await browser.newContext({

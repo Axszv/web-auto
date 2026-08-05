@@ -2,10 +2,10 @@
   "gogocs": [
     {
       "name": "sid",
-      "value": "374a9ee014a59dd35e40920b2c85c52fdff4572585b06b9eabfe969d8c4131bf",
+      "value": "392aca2841a4b1dd19fa9a76c35a1bb8d6cfc05056f0eee60031d9c4bc958a3b",
       "domain": "gogocs.xyz",
       "path": "/",
-      "expires": 1785892628.018864,
+      "expires": 1785977422.599905,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
@@ -14,10 +14,10 @@
   "sharedchat": [
     {
       "name": "share-session",
-      "value": "ad8f79bd3ad0420bb0ddc21d87a2a968",
+      "value": "4278547d05754186b053fba7402c410e",
       "domain": "new.sharedchat.cc",
       "path": "/",
-      "expires": 1786411063.484509,
+      "expires": 1786495838.950577,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"

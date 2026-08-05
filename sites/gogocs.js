@@ -61,7 +61,7 @@ async function run(config = {}) {
   const password = config.password || process.env.GOGOCS_PASSWORD || "XA531729";
   const BASE = "https://gogocs.xyz";
 
-  const browser = await chromium.launch({ headless: true, args: ["--proxy-server=http://127.0.0.1:10808"] });
+  const browser = await chromium.launch({ headless: true, args: [process.env.HTTP_PROXY ? "--proxy-server=" + process.env.HTTP_PROXY : ""] });
   const ctx = await browser.newContext({
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   });
@@ -80,7 +80,7 @@ async function run(config = {}) {
       await page.click(`button:has-text("取消账户保护")`);
       await sleep(5000);
       const okBtn = page.locator(`button:has-text("知道了")`);
-      if (await okBtn.count() > 0) await okBtn.click();
+      if (await okBtn.count() > 0) await okBtn.click({force:true});
       await sleep(3000);
     }
 
