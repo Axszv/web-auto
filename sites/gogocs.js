@@ -84,10 +84,10 @@ async function run(config = {}) {
       console.log('On disable page');
       const btn = page.locator('text=取消账户保护').first();
       if (await btn.count() > 0) {
-        await btn.evaluate(el => el.click());
+        await btn.evaluate(el => el.click({force:true}));
         await sleep(5000);
         const ok = page.locator('text=知道了').first();
-        if (await ok.count() > 0) await ok.evaluate(el => el.click());
+        if (await ok.count() > 0) await ok.evaluate(el => el.click({force:true});
         await sleep(2000);
       }
     }
