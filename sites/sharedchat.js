@@ -70,7 +70,7 @@ async function run(config = {}) {
         data: { reason }
       });
       console.log('sharedchat claim status:', resp.status());
-      result = await resp.json();
+      try { result = await resp.json(); } catch(e) { const body = await resp.text(); console.log('sharedchat claim body:', body.substring(0, 300)); result = { error: 'not json: ' + body.substring(0, 100) }; }
     } catch(e) { result = { error: e.message }; }
     console.log('Claim:', JSON.stringify(result));
 
