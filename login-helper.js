@@ -1,4 +1,4 @@
-// login-helper.js - Manual login helper for agentrouter/anyrouter (GitHub OAuth)
+﻿// login-helper.js - Manual login helper for agentrouter/anyrouter (GitHub OAuth)
 var fs = require('fs');
 var p = require('playwright').chromium;
 var os = require('os');
@@ -18,14 +18,12 @@ async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 (async () => {
   console.log('=== ' + site.toUpperCase() + ' Manual Login ===');
   console.log('Profile:', profileDir);
-  console.log('Proxy:', process.env.HTTP_PROXY || 'none');
   console.log('Opening ' + BASE + ' in browser...\n');
 
-  const proxyArg = process.env.HTTP_PROXY ? ['--proxy-server=' + process.env.HTTP_PROXY] : [];
   const ctx = await p.launchPersistentContext(profileDir, {
     headless: false,
     channel: 'msedge',
-    args: [...proxyArg, '--disable-blink-features=AutomationControlled'],
+    args: ['--disable-blink-features=AutomationControlled'],
     viewport: { width: 1920, height: 1080 }
   });
   const page = ctx.pages()[0] || await ctx.newPage();

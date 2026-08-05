@@ -66,7 +66,10 @@ async function run(config = {}) {
 
     console.log('agentrouter: logged in');
     const cr = await page.evaluate(async () => {
-      try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
+      try { const r = await fetch('/api/user/checkin', {
+          method: 'POST',
+          headers: { 'Accept': 'application/json', 'Referer': 'https://agentrouter.org/console/personal' }
+        }); return await r.json(); }
       catch(e) { return { error: e.message }; }
     });
     console.log('agentrouter checkin:', JSON.stringify(cr));
@@ -89,3 +92,4 @@ async function run(config = {}) {
 }
 
 module.exports = { run };
+
