@@ -64,20 +64,14 @@ async function run(config = {}) {
     }
 
     const reason = randomReason();
-    const result = await page.evaluate(async (reason) => {
-      try {
-        const r = await fetch('/frontend-api/vibe-code/codex/claim', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Referer': 'https://new.sharedchat.cc/list/'
-          },
-          body: JSON.stringify({ reason })
-        });
-        return await r.json();
-      } catch(e) { return { error: e.message }; }
-    }, reason);
+    let result = { error: 'no response' };
+    try {
+      const resp = await page.request.post(BASE + '/frontend-api/vibe-code/codex/claim', {
+        data: { reason }
+      });
+      console.log('sharedchat claim status:', resp.status());
+      result = await resp.json();
+    } catch(e) { result = { error: e.message }; }
     console.log('Claim:', JSON.stringify(result));
 
     const cookies = await ctx.cookies(BASE);
