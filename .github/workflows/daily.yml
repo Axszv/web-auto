@@ -26,7 +26,7 @@ jobs:
         run: npm ci
 
       - name: Install Playwright Chromium
-        run: npx playwright install chromium --playwright-dir ./node_modules/.cache/playwright
+        run: npx playwright install chromium
 
       - name: Run automation
         run: node auto.js
