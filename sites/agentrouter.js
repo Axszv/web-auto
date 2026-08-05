@@ -65,6 +65,17 @@ async function run(config = {}) {
     }
 
     console.log('agentrouter: logged in');
+    // Try clicking checkin button on page
+    try {
+      const btn = page.locator('text=签到').first();
+      if (await btn.count() > 0) {
+        await btn.click({force:true});
+        await sleep(3000);
+        console.log('agentrouter: clicked checkin button, URL:', page.url());
+      } else {
+        console.log('agentrouter: no checkin button found, page title:', await page.title());
+      }
+    } catch(e) { console.log('agentrouter click checkin error:', e.message); }
     let cr = { error: 'no response' };
     try {
       const cookies = await ctx.cookies(BASE);
