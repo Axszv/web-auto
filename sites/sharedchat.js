@@ -23,7 +23,7 @@ async function run(config = {}) {
   // Try msedge first, fall back to built-in chromium
   let browser;
   try {
-    browser = await chromium.launch({ headless: true, channel: 'msedge', args: [process.env.HTTP_PROXY ? "--proxy-server=" + process.env.HTTP_PROXY : ""] });
+    browser = await chromium.launch({ headless: true, channel: 'msedge', args: [] });
     console.log('sharedchat: using msedge channel');
   } catch (e) {
     console.log('sharedchat: msedge not available, using built-in chromium');

@@ -17,11 +17,10 @@ async function saveCookies(data) {
 
 async function run(config = {}) {
   const BASE = 'https://agentrouter.org';
-  const useProxy = process.env.HTTP_PROXY || process.env.ALL_PROXY || '';
+  // proxy removed for GitHub Actions
 
   const launchArgs = ['--disable-blink-features=AutomationControlled', '--disable-popup-blocking'];
-  if (useProxy) launchArgs.unshift('--proxy-server=' + useProxy);
-  
+    
 
   const browser = await chromium.launch({ headless: true, args: launchArgs });
   const ctx = await browser.newContext({

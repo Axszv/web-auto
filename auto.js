@@ -35,6 +35,7 @@ const sites = [
 
 (async () => {
   const log = [];
+  var hadFailure = false;
   const start = Date.now();
   log.push('=== Web Auto Start ===');
   log.push('Time: ' + new Date().toISOString());
@@ -50,8 +51,10 @@ const sites = [
     try {
       const result = await site.mod.run(cfg ? cfg.config : {});
       log.push('Result: ' + JSON.stringify(result));
+      if (result.success === false) hadFailure = true;
     } catch (e) {
       log.push('Error: ' + e.message);
+      hadFailure = true;
     }
     log.push('');
     await sleep(1500);
@@ -61,4 +64,8 @@ const sites = [
   const text = log.join('\n');
   console.log(text);
   await writeLog(log);
+  if (hadFailure) {
+    console.log('\n*** Some sites failed, exiting with error ***');
+    process.exit(1);
+  }
 })();
