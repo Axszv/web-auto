@@ -72,7 +72,7 @@ async function run(config = {}) {
       });
       const text = await resp.text();
       console.log('agentrouter checkin status:', resp.status());
-      cr = JSON.parse(text);
+      try { cr = JSON.parse(text); } catch(e) { console.log('agentrouter checkin body:', text.substring(0, 300)); cr = { error: 'not json: ' + text.substring(0, 100) }; }
     } catch(e) { cr = { error: e.message }; }
     console.log('agentrouter checkin:', JSON.stringify(cr));
 
