@@ -80,26 +80,39 @@ async function run(config = {}) {
       console.log('Already logged in (cookie reused)');
     }
 
-    // Check if on disable page - wait for it and check URL or button
+    // After login, gogocs redirects to /user/disable — wait and check
     await sleep(3000);
-    const currentUrlAfterLogin = page.url();
-    console.log('gogocs URL after login:', currentUrlAfterLogin);
-    let onDisablePage = currentUrlAfterLogin.includes('disable');
-    if (!onDisablePage) {
-      const hasBtn = await page.locator('#reactive, text=取消账户保护').count();
-      onDisablePage = hasBtn > 0;
-      console.log('gogocs disable button found:', hasBtn);
+    let url = page.url();
+    console.log('gogocs URL after login flow:', url);
+
+    // Wait up to 15s for redirect to /user/disable
+    let onDisablePage = url.includes('disable');
+    let waitCount = 0;
+    while (!onDisablePage && waitCount < 15) {
+      await sleep(1000);
+      url = page.url();
+      onDisablePage = url.includes('disable');
+      waitCount++;
     }
+    console.log('gogocs disable page detected:', onDisablePage, 'url:', url);
+
     if (onDisablePage) {
-      console.log('On disable page');
+      // Also check for button by ID in case URL hasn't updated yet
       const btn = page.locator('#reactive, text=取消账户保护').first();
       if (await btn.count() > 0) {
-        await btn.evaluate(el => el.click({force:true}));
-        console.log('gogocs: clicked 取消账户保护');
+        console.log('gogocs: clicking 取消账户保护');
+        await btn.click({ force: true });
         await sleep(5000);
-        const ok = page.locator('text=知道了').first();
-        const ok = page.locator('text=知道了').first();
-        if (await ok.count() > 0) await ok.evaluate(el => el.click({force:true}));
+        // Check if redirected or modal appeared
+        url = page.url();
+        console.log('gogocs URL after click:', url);
+        // Try to dismiss modal
+        const okBtn = page.locator('text=知道了').first();
+        if (await okBtn.count() > 0) {
+          await okBtn.click({ force: true });
+          console.log('gogocs: clicked 知道了');
+          await sleep(2000);
+        }
       }
     }
 
