@@ -80,15 +80,26 @@ async function run(config = {}) {
       console.log('Already logged in (cookie reused)');
     }
 
-    if (page.url().includes('disable')) {
+    // Check if on disable page - wait for it and check URL or button
+    await sleep(3000);
+    const currentUrlAfterLogin = page.url();
+    console.log('gogocs URL after login:', currentUrlAfterLogin);
+    let onDisablePage = currentUrlAfterLogin.includes('disable');
+    if (!onDisablePage) {
+      const hasBtn = await page.locator('#reactive, text=取消账户保护').count();
+      onDisablePage = hasBtn > 0;
+      console.log('gogocs disable button found:', hasBtn);
+    }
+    if (onDisablePage) {
       console.log('On disable page');
-      const btn = page.locator('text=取消账户保护').first();
+      const btn = page.locator('#reactive, text=取消账户保护').first();
       if (await btn.count() > 0) {
         await btn.evaluate(el => el.click({force:true}));
+        console.log('gogocs: clicked 取消账户保护');
         await sleep(5000);
         const ok = page.locator('text=知道了').first();
+        const ok = page.locator('text=知道了').first();
         if (await ok.count() > 0) await ok.evaluate(el => el.click({force:true}));
-        await sleep(2000);
       }
     }
 
