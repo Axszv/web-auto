@@ -85,20 +85,18 @@ async function run(config = {}) {
     let url = page.url();
     console.log('gogocs URL after login flow:', url);
 
-    // Wait up to 15s for redirect to /user/disable
-    let onDisablePage = url.includes('disable');
-    let waitCount = 0;
-    while (!onDisablePage && waitCount < 15) {
-      await sleep(1000);
+    // If not on disable page, navigate directly
+    if (!url.includes('disable')) {
+      console.log('gogocs: navigating to /user/disable directly');
+      await page.goto(BASE + '/user/disable', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(2000);
       url = page.url();
-      onDisablePage = url.includes('disable');
-      waitCount++;
     }
-    console.log('gogocs disable page detected:', onDisablePage, 'url:', url);
+    console.log('gogocs disable page detected:', url.includes('disable'), 'url:', url);
 
-    if (onDisablePage) {
-      // Also check for button by ID in case URL hasn't updated yet
-      const btn = page.locator('#reactive, text=取消账户保护').first();
+    if (url.includes('disable')) {
+      // Also check for button by text in case URL hasn't updated yet
+      const btn = page.locator('text=取消账户保护').first();
       if (await btn.count() > 0) {
         console.log('gogocs: clicking 取消账户保护');
         await btn.click({ force: true });
@@ -106,13 +104,23 @@ async function run(config = {}) {
         // Check if redirected or modal appeared
         url = page.url();
         console.log('gogocs URL after click:', url);
-        // Try to dismiss modal
-        const okBtn = page.locator('text=知道了').first();
-        if (await okBtn.count() > 0) {
-          await okBtn.click({ force: true });
-          console.log('gogocs: clicked 知道了');
-          await sleep(2000);
+        // Try to dismiss modal if still on disable page
+        if (url.includes('disable')) {
+          try {
+            const okBtn = page.locator('text=知道了').first();
+            if (await okBtn.count() > 0 && await okBtn.isVisible()) {
+              await okBtn.click({ force: true });
+              console.log('gogocs: clicked 知道了');
+              await sleep(2000);
+            }
+          } catch (e) {
+            console.log('gogocs: modal dismiss skipped:', e.message);
+          }
+        } else {
+          console.log('gogocs: redirected after cancel (likely success)');
         }
+      } else {
+        console.log('gogocs: button not found, URL:', url);
       }
     }
 

@@ -66,17 +66,34 @@ async function run(config = {}) {
     const reason = randomReason();
     let result = { error: 'no response' };
     try {
-      const cookies = await ctx.cookies(BASE);
-      const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
-      const resp = await page.request.post(BASE + '/frontend-api/vibe-code/codex/claim', {
-        data: { reason },
-        headers: { 'Cookie': cookieStr, 'Content-Type': 'application/json', 'Accept': 'application/json', 'Referer': BASE + '/list/' }
-      });
-      console.log('sharedchat claim status:', resp.status());
-      try { result = await resp.json(); } catch(e) { const body = await resp.text(); console.log('sharedchat claim body:', body.substring(0, 300)); result = { error: 'not json: ' + body.substring(0, 100) }; }
+      const resp = await page.evaluate(async (data) => {
+        try {
+          const r = await fetch('/frontend-api/vibe-code/codex/claim', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(data),
+            credentials: 'include'
+          });
+          return { status: r.status, body: await r.text() };
+        } catch (e) {
+          return { error: e.message };
+        }
+      }, { reason });
+      console.log('sharedchat claim status:', resp.status);
+      try {
+        result = JSON.parse(resp.body);
+        console.log('Claim:', JSON.stringify(result));
+      } catch (e) {
+        console.log('sharedchat claim body:', resp.body.substring(0, 300));
+        result = { error: 'not json', status: resp.status };
+      }
+      // If already claimed today, that's still a success
+      if (result.code === 1 || result.ret === 1) {
+        console.log('sharedchat: claim handled (may be already claimed)');
+      }
     } catch(e) { result = { error: e.message }; }
-    console.log('Claim:', JSON.stringify(result));
 
+    // Save cookies (always, even if already claimed)
     const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
       const all = await loadCookies();
