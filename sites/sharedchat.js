@@ -74,14 +74,27 @@ async function run(config = {}) {
     console.log('sharedchat claim page URL:', page.url());
 
     // Click the claim button on page (more reliable than API call)
-    const claimBtn = page.locator('text=领取Codex权益, text=领取 Codex 权益').first();
+    // Try multiple text variations
+    const claimBtn = page.locator('text=领取Codex权益').or(page.locator('text=领取 Codex 权益')).or(page.locator('text=领取'));
     if (await claimBtn.count() > 0) {
       console.log('sharedchat: clicking claim button');
       await claimBtn.click({ force: true });
       await sleep(3000);
       console.log('sharedchat after claim click, URL:', page.url());
+      // Check result message
+      const pageText = await page.evaluate(() => document.body.innerText);
+      console.log('sharedchat page after click:', pageText.substring(0, 300));
     } else {
-      console.log('sharedchat: claim button not found');
+      console.log('sharedchat: claim button not found, checking page state');
+      // Try navigating to dashboard to trigger claim
+      await page.goto(BASE + '/list/#/vibe-code', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(2000);
+      const newClaimBtn = page.locator('text=领取Codex权益').or(page.locator('text=领取 Codex 权益')).or(page.locator('text=领取'));
+      if (await newClaimBtn.count() > 0) {
+        console.log('sharedchat: clicking claim button after navigate');
+        await newClaimBtn.click({ force: true });
+        await sleep(3000);
+      }
     }
 
     // Also try API call to check status
