@@ -125,22 +125,97 @@ async function run(config = {}) {
     }
 
     await page.goto(BASE + '/user/edit', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(2000);
-    const groupLabel = page.locator('text=分组 网络').first();
-    if (await groupLabel.count() > 0) {
-      await groupLabel.evaluate(el => el.click());
-      await sleep(1000);
-      const opts = await page.locator('text=延迟优先').all();
-      for (const opt of opts) {
-        if (await opt.isVisible().catch(() => false)) {
-          await opt.evaluate(el => el.click());
+    await sleep(3000);
+    console.log('gogocs /user/edit URL:', page.url());
+    console.log('gogocs /user/edit title:', await page.title());
+
+    // Debug: dump page content around group section
+    try {
+      const pageText = await page.evaluate(() => document.body.innerText);
+      console.log('gogocs page text snippet:', pageText.substring(0, 800));
+    } catch(e) {}
+
+    // Try multiple selectors for the group label
+    let groupLabel = null;
+    const groupSelectors = [
+      'text=分组 网络',
+      'text=分组',
+      'label:has-text("分组")',
+      '[data-label*="分组"]',
+      '.form-group:has-text("分组")'
+    ];
+    for (const sel of groupSelectors) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.count() > 0) {
+          console.log('gogocs: found group label via selector:', sel);
+          groupLabel = el;
           break;
         }
+      } catch(e) {}
+    }
+
+    if (groupLabel) {
+      console.log('gogocs: clicking group label');
+      await groupLabel.click({ force: true });
+      await sleep(1500);
+
+      // Debug: check what's visible after click
+      try {
+        const opts = await page.locator('text=延迟优先').all();
+        console.log('gogocs: found', opts.length, '延迟优先 elements');
+        for (let i = 0; i < opts.length; i++) {
+          try {
+            const visible = await opts[i].isVisible();
+            console.log('gogocs: option', i, 'visible:', visible, 'text:', await opts[i].textContent().catch(() => 'N/A'));
+          } catch(e) {}
+        }
+      } catch(e) {}
+
+      // Try clicking the option
+      let optionClicked = false;
+      try {
+        const opts = await page.locator('text=延迟优先').all();
+        for (const opt of opts) {
+          if (await opt.isVisible().catch(() => false)) {
+            console.log('gogocs: clicking 延迟优先 option');
+            await opt.click({ force: true });
+            optionClicked = true;
+            break;
+          }
+        }
+      } catch(e) {
+        console.log('gogocs: option click error:', e.message);
       }
-      await sleep(500);
-      const submit = page.locator('button[type="submit"]');
-      if (await submit.count() > 0) await submit.click();
-      console.log('Group set to 延迟优先');
+
+      if (!optionClicked) {
+        // Fallback: try clicking via JavaScript
+        console.log('gogocs: trying JS click fallback for 延迟优先');
+        await page.evaluate(() => {
+          const els = Array.from(document.querySelectorAll('*')).filter(el => el.textContent && el.textContent.includes('延迟优先'));
+          for (const el of els) {
+            if (el.offsetParent !== null) { el.click(); break; }
+          }
+        });
+      }
+      await sleep(1000);
+
+      // Submit
+      try {
+        const submit = page.locator('button[type="submit"]').first();
+        if (await submit.count() > 0) {
+          console.log('gogocs: submitting form');
+          await submit.click({ force: true });
+          await sleep(3000);
+          console.log('gogocs: after submit URL:', page.url());
+          console.log('gogocs: after submit title:', await page.title());
+        }
+      } catch(e) {
+        console.log('gogocs: submit error:', e.message);
+      }
+      console.log('Group setting attempted');
+    } else {
+      console.log('gogocs: group label not found, skipping group setting');
     }
 
     const cookies = await ctx.cookies(BASE);
