@@ -28,9 +28,19 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium firefox
 
+      - name: Install system deps for Firefox
+        run: npx playwright install-deps firefox
+
+      - name: Setup virtual display
+        run: |
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1280x800x24 &
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+
       - name: Run automation
         run: node auto.js
         env:
+          DISPLAY: :99
           GOGOCS_EMAIL: ${{ secrets.GOGOCS_EMAIL }}
           GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
           GH_USER: ${{ secrets.GH_USER }}

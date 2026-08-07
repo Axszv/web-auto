@@ -1,4 +1,4 @@
-// sites/agentrouter.js — 先加载cookies过Cloudflare，再清除重新OAuth登录
+// sites/agentrouter.js — 非headless Firefox + Xvfb虚拟显示器
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +20,14 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
 
-  const browser = await firefox.launch({ headless: true, args: ['--no-sandbox'] });
+  // 非headless模式，需要DISPLAY
+  const display = process.env.DISPLAY || ':99';
+  console.log('agentrouter: DISPLAY=' + display);
+
+  const browser = await firefox.launch({
+    headless: false,
+    args: ['--no-sandbox']
+  });
 
   const ctx = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
@@ -34,39 +41,22 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
+  const saved = await loadCookies();
+  if (saved.agentrouter && saved.agentrouter.length > 0) await ctx.addCookies(saved.agentrouter);
+
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    // Step 1: Load old cookies to pass Cloudflare
-    const saved = await loadCookies();
-    if (saved.agentrouter && saved.agentrouter.length > 0) {
-      await ctx.addCookies(saved.agentrouter);
-      console.log('agentrouter: loaded saved cookies to pass Cloudflare');
-    }
-
-    // Navigate to login page (with cookies, Cloudflare should let us through)
-    console.log('agentrouter: loading login page with cookies...');
+    console.log('agentrouter: navigating to login...');
     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(3000);
     console.log('agentrouter URL:', page.url());
 
-    // Check if we can see the login page content
     const pageText = await page.evaluate(() => document.body.innerText);
     console.log('agentrouter page text:', pageText.substring(0, 300));
 
-    // Step 2: Clear cookies to force fresh OAuth login
-    console.log('agentrouter: clearing cookies for fresh login...');
-    await ctx.clearCookies();
-    await sleep(1000);
-
-    // Navigate to login again
-    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(5000);
-    console.log('agentrouter after clear, URL:', page.url());
-
-    // Step 3: Click GitHub button
     const hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
     console.log('agentrouter: has GitHub button:', hasGitHubBtn);
 
@@ -81,7 +71,6 @@ async function run(config = {}) {
       await sleep(3000);
       console.log('agentrouter after click, URL:', page.url());
 
-      // On GitHub login?
       if (page.url().includes('github.com/login') && GH_USER && GH_PASS) {
         console.log('agentrouter: on GitHub login page');
         await page.locator('input[name="login"]').first().fill(GH_USER);
@@ -95,7 +84,6 @@ async function run(config = {}) {
         }
       }
 
-      // On authorize page?
       try {
         await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
         console.log('agentrouter: on authorize page');
@@ -111,10 +99,9 @@ async function run(config = {}) {
       await sleep(5000);
       console.log('agentrouter: final URL:', page.url());
     } else {
-      console.log('agentrouter: no GitHub button, page text:', pageText.substring(0, 200));
+      console.log('agentrouter: no GitHub button found');
     }
 
-    // Check if logged in
     if (!page.url().includes('login')) {
       console.log('agentrouter: logged in!');
       try {
@@ -129,7 +116,6 @@ async function run(config = {}) {
       console.log('agentrouter: still on login page');
     }
 
-    // Save cookies
     const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
       const all = await loadCookies();
