@@ -11,7 +11,7 @@ permissions:
 jobs:
   auto:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,16 +25,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Install Playwright browsers
+        run: npx playwright install chromium firefox
 
       - name: Run automation
         run: node auto.js
         env:
           GOGOCS_EMAIL: ${{ secrets.GOGOCS_EMAIL }}
           GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
-          SHAREDCHAT_EMAIL: ${{ secrets.SHAREDCHAT_EMAIL }}
-          SHAREDCHAT_PASSWORD: ${{ secrets.SHAREDCHAT_PASSWORD }}
+          GITHUB_USER: ${{ secrets.GITHUB_USER }}
+          GITHUB_PASS: ${{ secrets.GITHUB_PASS }}
 
       - name: Commit and push updated cookies
         run: |
