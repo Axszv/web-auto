@@ -33,8 +33,8 @@ jobs:
         env:
           GOGOCS_EMAIL: ${{ secrets.GOGOCS_EMAIL }}
           GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
-          GITHUB_USER: ${{ secrets.GITHUB_USER }}
-          GITHUB_PASS: ${{ secrets.GITHUB_PASS }}
+          GH_USER: ${{ secrets.GH_USER }}
+          GH_PASS: ${{ secrets.GH_PASS }}
 
       - name: Commit and push updated cookies
         run: |

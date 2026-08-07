@@ -16,8 +16,8 @@ async function saveCookies(data) {
 }
 
 async function run(config = {}) {
-  const GITHUB_USER = config.github_user || process.env.GITHUB_USER || '';
-  const GITHUB_PASS = config.github_pass || process.env.GITHUB_PASS || '';
+  const GITHUB_USER = config.GH_USER || process.env.GH_USER || '';
+  const GITHUB_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
   const browser = await firefox.launch({
