@@ -1,4 +1,4 @@
-// sites/anyrouter.js — Uses Playwright Firefox with anti-detection
+// sites/anyrouter.js — 非headless Firefox + Xvfb虚拟显示器
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -16,12 +16,12 @@ async function saveCookies(data) {
 }
 
 async function run(config = {}) {
-  const GITHUB_USER = config.GH_USER || process.env.GH_USER || '';
-  const GITHUB_PASS = config.GH_PASS || process.env.GH_PASS || '';
+  const GH_USER = config.GH_USER || process.env.GH_USER || '';
+  const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
   const browser = await firefox.launch({
-    headless: true,
+    headless: false,
     args: ['--no-sandbox']
   });
 
@@ -61,67 +61,48 @@ async function run(config = {}) {
       await sleep(3000);
       console.log('anyrouter login page URL:', page.url());
 
-      // Click GitHub button using multiple strategies
-      let clicked = false;
-      // Strategy 1: Evaluate JS to find and click
-      clicked = await page.evaluate(() => {
-        const svg = document.querySelector('[aria-label="github_logo"]');
-        if (svg) {
-          const btn = svg.closest('button') || svg.parentElement?.closest('button');
-          if (btn) { btn.click(); return true; }
-        }
-        // Try by text content
-        const allBtns = Array.from(document.querySelectorAll('button'));
-        for (const b of allBtns) {
-          if (b.textContent && b.textContent.includes('GitHub')) { b.click(); return true; }
-        }
-        return false;
-      });
-      console.log('anyrouter: click result:', clicked);
+      const hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
+      console.log('anyrouter: has GitHub button:', hasGitHubBtn);
 
-      // Strategy 2: Playwright click if JS click didn't navigate
-      if (!page.url().includes('github.com')) {
-        console.log('anyrouter: trying Playwright click...');
-        // Find the button by various selectors
-        const btn = page.locator('[aria-label="github_logo"]').or(page.locator('text=Continue with GitHub')).or(page.locator('button:has-text("GitHub")')).first();
-        if (await btn.count() > 0) {
-          console.log('anyrouter: found button via Playwright, clicking...');
-          await btn.click({ force: true });
+      if (hasGitHubBtn) {
+        await page.evaluate(() => {
+          const svg = document.querySelector('[aria-label="github_logo"]');
+          if (svg) {
+            const btn = svg.closest('button') || svg.parentElement?.closest('button');
+            if (btn) btn.click();
+          }
+        });
+        await sleep(3000);
+        console.log('anyrouter after click, URL:', page.url());
+
+        if (page.url().includes('github.com/login') && GH_USER && GH_PASS) {
+          console.log('anyrouter: on GitHub login page');
+          await page.locator('input[name="login"]').first().fill(GH_USER);
+          await page.locator('input[name="password"]').first().fill(GH_PASS);
+          await page.locator('input[type="submit"]').first().click();
+          await sleep(2000);
+          if (page.url().includes('github.com/login')) {
+            console.log('anyrouter: 2FA required');
+            await browser.close();
+            return { success: false, error: '2fa_required' };
+          }
         }
+
+        try {
+          await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+          console.log('anyrouter: on authorize page');
+          const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+          if (await authBtn.count() > 0) {
+            await authBtn.click({ force: true });
+            console.log('anyrouter: clicked Authorize');
+          }
+        } catch (e) {
+          console.log('anyrouter: did not reach authorize, URL:', page.url());
+        }
+
+        await sleep(5000);
+        console.log('anyrouter: final URL:', page.url());
       }
-
-      await sleep(5000);
-      console.log('anyrouter after click, URL:', page.url());
-
-      // On GitHub login?
-      if (page.url().includes('github.com/login') && GITHUB_USER && GITHUB_PASS) {
-        console.log('anyrouter: on GitHub login page');
-        await page.locator('input[name="login"]').first().fill(GITHUB_USER);
-        await page.locator('input[name="password"]').first().fill(GITHUB_PASS);
-        await page.locator('input[type="submit"]').first().click();
-        await sleep(2000);
-        if (page.url().includes('github.com/login')) {
-          console.log('anyrouter: 2FA required');
-          await browser.close();
-          return { success: false, error: '2fa_required' };
-        }
-      }
-
-      // On authorize page?
-      try {
-        await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-        console.log('anyrouter: on authorize page');
-        const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-        if (await authBtn.count() > 0) {
-          await authBtn.click({ force: true });
-          console.log('anyrouter: clicked Authorize');
-        }
-      } catch (e) {
-        console.log('anyrouter: did not reach authorize, URL:', page.url());
-      }
-
-      await sleep(5000);
-      console.log('anyrouter: final URL:', page.url());
     }
 
     if (!page.url().includes('login')) {
