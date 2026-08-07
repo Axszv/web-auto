@@ -41,11 +41,13 @@ async function run(config = {}) {
 
   try {
     await page.goto(BASE + '/list/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(1500);
-    const url = page.url();
+    await sleep(2000);
+    let url = page.url();
     console.log('sharedchat URL:', url);
 
+    // Always try to login if not already logged in
     if (url.includes('login') || url.includes('sign')) {
+      console.log('sharedchat: logging in');
       await page.locator('span:has-text("用户登录")').first().click();
       await sleep(1000);
       const inputs = await page.locator('input').all();
@@ -57,16 +59,35 @@ async function run(config = {}) {
           if (b && b.textContent.includes('登录')) b.click();
         });
       }
-      await sleep(2000);
-      console.log('Login URL:', page.url());
+      await sleep(3000);
+      url = page.url();
+      console.log('sharedchat after login:', url);
     } else {
-      console.log('Already logged in (cookie reused)');
+      console.log('sharedchat: already logged in (cookie reused)');
     }
 
+    // Navigate to the claim page to find the button
+    await page.goto(BASE + '/list/#/vibe-code/dashboard?activeMenu=dashboard&service=codex', {
+      waitUntil: 'domcontentloaded', timeout: 30000
+    });
+    await sleep(2000);
+    console.log('sharedchat claim page URL:', page.url());
+
+    // Click the claim button on page (more reliable than API call)
+    const claimBtn = page.locator('text=领取Codex权益, text=领取 Codex 权益').first();
+    if (await claimBtn.count() > 0) {
+      console.log('sharedchat: clicking claim button');
+      await claimBtn.click({ force: true });
+      await sleep(3000);
+      console.log('sharedchat after claim click, URL:', page.url());
+    } else {
+      console.log('sharedchat: claim button not found');
+    }
+
+    // Also try API call to check status
     const reason = randomReason();
-    let result = { error: 'no response' };
     try {
-      const resp = await page.evaluate(async (data) => {
+      const apiResult = await page.evaluate(async (data) => {
         try {
           const r = await fetch('/frontend-api/vibe-code/codex/claim', {
             method: 'POST',
@@ -79,19 +100,18 @@ async function run(config = {}) {
           return { error: e.message };
         }
       }, { reason });
-      console.log('sharedchat claim status:', resp.status);
+      console.log('sharedchat API result:', apiResult.status);
       try {
-        result = JSON.parse(resp.body);
-        console.log('Claim:', JSON.stringify(result));
+        const json = JSON.parse(apiResult.body);
+        if (json.code === 1) {
+          console.log('sharedchat claim message:', json.data?.message || 'success');
+        }
       } catch (e) {
-        console.log('sharedchat claim body:', resp.body.substring(0, 300));
-        result = { error: 'not json', status: resp.status };
+        console.log('sharedchat API response:', apiResult.body.substring(0, 200));
       }
-      // If already claimed today, that's still a success
-      if (result.code === 1 || result.ret === 1) {
-        console.log('sharedchat: claim handled (may be already claimed)');
-      }
-    } catch(e) { result = { error: e.message }; }
+    } catch (e) {
+      console.log('sharedchat API error:', e.message);
+    }
 
     // Save cookies (always, even if already claimed)
     const cookies = await ctx.cookies(BASE);
