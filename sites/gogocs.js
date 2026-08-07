@@ -128,57 +128,35 @@ async function run(config = {}) {
     await sleep(3000);
     console.log('gogocs /user/edit URL:', page.url());
 
-    // Set group using JS to bypass React dropdown visibility issues
-    await page.evaluate(() => {
-      // Find and click the group label (opens dropdown)
-      const groupLabel = Array.from(document.querySelectorAll('*')).find(el =>
-        el.textContent && el.textContent.includes('分组 网络')
-      );
-      if (groupLabel) {
-        groupLabel.click();
+    // Set group: click dropdown button → select option → click check button
+    console.log('gogocs: setting group...');
+    const groupBtn = page.locator('#group');
+    if (await groupBtn.count() > 0) {
+      console.log('gogocs: clicking group dropdown');
+      await groupBtn.click({ force: true });
+      await sleep(1000);
+
+      // Click the 延迟优先 option (dropdown may not be visible)
+      const option = page.locator('a.dropdown-option').filter({ hasText: '延迟优先' });
+      if (await option.count() > 0) {
+        console.log('gogocs: clicking 延迟优先 option');
+        await option.evaluate(el => el.click());
+        await sleep(1000);
+      } else {
+        console.log('gogocs: 延迟优先 option not found');
       }
 
-      // Find and click the 延迟优先 option (may be hidden by CSS)
-      const options = Array.from(document.querySelectorAll('*')).filter(el =>
-        el.textContent && el.textContent.trim() === '延迟优先' && el.offsetParent !== null
-      );
-      for (const opt of options) {
-        // Dispatch mouse events manually to trigger React handler
-        opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-        opt.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-        opt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        console.log('gogocs JS: clicked option', opt.tagName, opt.className);
+      // Click check button to confirm
+      const checkBtn = page.locator('#group-update');
+      if (await checkBtn.count() > 0) {
+        console.log('gogocs: clicking group-update button');
+        await checkBtn.click({ force: true });
+        await sleep(2000);
       }
-    });
-    await sleep(2000);
-
-    // Try Playwright click as fallback if JS didn't work
-    const dropdownOpen = await page.locator('text=延迟优先').count().catch(() => 0);
-    if (dropdownOpen > 0) {
-      const opts = await page.locator('text=延迟优先').all();
-      for (const opt of opts) {
-        if (await opt.isVisible().catch(() => false)) {
-          await opt.click({ force: true });
-          console.log('gogocs: Playwright clicked 延迟优先');
-          break;
-        }
-      }
+      console.log('gogocs: group setting done, URL:', page.url());
+    } else {
+      console.log('gogocs: #group button not found');
     }
-    await sleep(1500);
-
-    // Submit the form
-    try {
-      const submitBtn = page.locator('button[type="submit"]').first();
-      if (await submitBtn.count() > 0) {
-        console.log('gogocs: clicking submit button');
-        await submitBtn.click({ force: true });
-        await sleep(3000);
-        console.log('gogocs: after submit URL:', page.url());
-      }
-    } catch (e) {
-      console.log('gogocs: submit error:', e.message);
-    }
-    console.log('gogocs: group setting done');
 
     const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
