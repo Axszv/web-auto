@@ -1,4 +1,5 @@
-const { chromium } = require('playwright');
+// sites/anyrouter.js — Uses Playwright Firefox with anti-detection
+const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
@@ -19,29 +20,34 @@ async function run(config = {}) {
   const GITHUB_PASS = config.github_pass || process.env.GITHUB_PASS || '';
   const BASE = 'https://anyrouter.top';
 
-  const profileDir = path.join(__dirname, '..', '.cache', 'anyrouter_profile');
-  if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
-
-  const browser = await chromium.launchPersistentContext(profileDir, {
-    headless: false,
-    channel: 'msedge',
-    args: ['--disable-blink-features=AutomationControlled'],
-    viewport: { width: 1280, height: 800 }
+  const browser = await firefox.launch({
+    headless: true,
+    args: ['--no-sandbox']
   });
 
-  const page = browser.pages()[0] || await browser.newPage();
+  const ctx = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+    viewport: { width: 1280, height: 800 },
+    locale: 'en-US'
+  });
+
+  await ctx.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+  });
+
+  const saved = await loadCookies();
+  if (saved.anyrouter && saved.anyrouter.length > 0) await ctx.addCookies(saved.anyrouter);
+
+  const page = await ctx.newPage();
+  page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
+  page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    const saved = await loadCookies();
-    if (saved.anyrouter && saved.anyrouter.length > 0) {
-      await browser.addCookies(saved.anyrouter);
-      console.log('anyrouter: loaded saved cookies');
-    }
-
-    // Bypass Cloudflare first
-    console.log('anyrouter: bypassing Cloudflare...');
+    console.log('anyrouter: starting...');
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await sleep(15000);
+    await sleep(5000);
     console.log('anyrouter after main:', page.url());
 
     await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -55,48 +61,51 @@ async function run(config = {}) {
       await sleep(3000);
       console.log('anyrouter login page URL:', page.url());
 
-      // Click GitHub button
-      const clicked = await page.evaluate(() => {
-        const svg = document.querySelector('[aria-label="github_logo"]');
-        if (svg) {
-          const btn = svg.closest('button') || svg.parentElement?.closest('button');
-          if (btn) { btn.click(); return true; }
-        }
-        return false;
-      });
-      console.log('anyrouter GitHub button clicked:', clicked);
+      const pageText = await page.evaluate(() => document.body.innerText);
+      console.log('anyrouter page text:', pageText.substring(0, 300));
 
-      await sleep(3000);
-      console.log('anyrouter after click, URL:', page.url());
+      const hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
+      console.log('anyrouter: has GitHub button:', hasGitHubBtn);
 
-      // On GitHub login?
-      if (page.url().includes('github.com/login')) {
-        console.log('anyrouter: on GitHub login page');
-        await page.locator('input[name="login"]').first().fill(GITHUB_USER);
-        await page.locator('input[name="password"]').first().fill(GITHUB_PASS);
-        await page.locator('input[type="submit"]').first().click();
-        await sleep(2000);
-        if (page.url().includes('github.com/login')) {
-          console.log('anyrouter: 2FA required');
-          return { success: false, error: '2fa_required' };
+      if (hasGitHubBtn) {
+        await page.evaluate(() => {
+          const svg = document.querySelector('[aria-label="github_logo"]');
+          if (svg) {
+            const btn = svg.closest('button') || svg.parentElement?.closest('button');
+            if (btn) btn.click();
+          }
+        });
+        await sleep(3000);
+        console.log('anyrouter after click, URL:', page.url());
+
+        if (page.url().includes('github.com/login') && GITHUB_USER && GITHUB_PASS) {
+          console.log('anyrouter: on GitHub login page');
+          await page.locator('input[name="login"]').first().fill(GITHUB_USER);
+          await page.locator('input[name="password"]').first().fill(GITHUB_PASS);
+          await page.locator('input[type="submit"]').first().click();
+          await sleep(2000);
+          if (page.url().includes('github.com/login')) {
+            console.log('anyrouter: 2FA required');
+            await browser.close();
+            return { success: false, error: '2fa_required' };
+          }
         }
+
+        try {
+          await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+          console.log('anyrouter: on authorize page');
+          const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+          if (await authBtn.count() > 0) {
+            await authBtn.click({ force: true });
+            console.log('anyrouter: clicked Authorize');
+          }
+        } catch (e) {
+          console.log('anyrouter: did not reach authorize, URL:', page.url());
+        }
+
+        await sleep(5000);
+        console.log('anyrouter: final URL:', page.url());
       }
-
-      // On authorize page?
-      try {
-        await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-        console.log('anyrouter: on authorize page');
-        const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-        if (await authBtn.count() > 0) {
-          await authBtn.click({ force: true });
-          console.log('anyrouter: clicked Authorize');
-        }
-      } catch (e) {
-        console.log('anyrouter: did not reach authorize, URL:', page.url());
-      }
-
-      await sleep(5000);
-      console.log('anyrouter: final URL:', page.url());
     }
 
     if (!page.url().includes('login')) {
@@ -112,8 +121,7 @@ async function run(config = {}) {
       console.log('anyrouter: still on login page');
     }
 
-    // Save cookies
-    const cookies = await browser.cookies(BASE);
+    const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
       const all = await loadCookies();
       all.anyrouter = cookies;
@@ -121,13 +129,13 @@ async function run(config = {}) {
       console.log('anyrouter cookies saved:', cookies.length);
     }
 
+    await browser.close();
     console.log('anyrouter done');
     return { success: true };
   } catch (e) {
     console.error('anyrouter error:', e.message);
-    return { success: false, error: e.message };
-  } finally {
     await browser.close();
+    return { success: false, error: e.message };
   }
 }
 
