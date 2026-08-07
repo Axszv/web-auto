@@ -35,8 +35,7 @@ async function run(config = {}) {
   });
 
   const saved = await loadCookies();
-  if (saved.sharedchat && saved.sharedchat.length > 0) await ctx.addCookies(saved.sharedchat);
-
+  // Always log in fresh — session cookies expire quickly on sharedchat
   const page = await ctx.newPage();
 
   try {
@@ -45,26 +44,22 @@ async function run(config = {}) {
     let url = page.url();
     console.log('sharedchat URL:', url);
 
-    // Always try to login if not already logged in
-    if (url.includes('login') || url.includes('sign')) {
-      console.log('sharedchat: logging in');
-      await page.locator('span:has-text("用户登录")').first().click();
-      await sleep(1000);
-      const inputs = await page.locator('input').all();
-      if (inputs.length >= 2) {
-        await inputs[0].fill(email);
-        await inputs[1].fill(password);
-        await page.evaluate(() => {
-          const b = document.querySelector('button');
-          if (b && b.textContent.includes('登录')) b.click();
-        });
-      }
-      await sleep(3000);
-      url = page.url();
-      console.log('sharedchat after login:', url);
-    } else {
-      console.log('sharedchat: already logged in (cookie reused)');
+    // Always login to ensure valid session
+    console.log('sharedchat: logging in');
+    await page.locator('span:has-text("用户登录")').first().click();
+    await sleep(1000);
+    const inputs = await page.locator('input').all();
+    if (inputs.length >= 2) {
+      await inputs[0].fill(email);
+      await inputs[1].fill(password);
+      await page.evaluate(() => {
+        const b = document.querySelector('button');
+        if (b && b.textContent.includes('登录')) b.click();
+      });
     }
+    await sleep(3000);
+    url = page.url();
+    console.log('sharedchat after login:', url);
 
     // Navigate to the claim page to find the button
     await page.goto(BASE + '/list/#/vibe-code/dashboard?activeMenu=dashboard&service=codex', {
