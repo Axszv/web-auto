@@ -117,25 +117,57 @@ async function run(config = {}) {
     }
 
     // Now on dashboard, try to find and click claim button
-    console.log('sharedchat: looking for claim button...');
-    let claimed = false;
+    console.log('sharedchat: waiting for page to render...');
+    await sleep(3000);
 
-    // Try clicking the claim button
-    const claimBtn = page.locator('text=领取Codex权益').or(page.locator('text=领取 Codex 权益')).or(page.locator('text=领取'));
-    if (await claimBtn.count() > 0) {
+    // Dump page structure for debugging
+    try {
+      const html = await page.evaluate(() => {
+        const body = document.body.innerText;
+        return body.substring(0, 1000);
+      });
+      console.log('sharedchat page content:', html);
+    } catch(e) {}
+
+    // Try multiple strategies to find the claim button
+    let claimBtn = null;
+    const claimSelectors = [
+      'text=领取Codex权益',
+      'text=领取 Codex 权益',
+      'text=领取',
+      '[class*="claim"]',
+      'button:has-text("领取")',
+      'a:has-text("领取")'
+    ];
+
+    for (const sel of claimSelectors) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.count() > 0) {
+          claimBtn = el;
+          console.log('sharedchat: found claim button via', sel);
+          break;
+        }
+      } catch(e) { /* try next */ }
+    }
+
+    let claimed = false;
+    if (claimBtn) {
       console.log('sharedchat: clicking claim button');
       await claimBtn.click({ force: true });
       await sleep(3000);
       console.log('sharedchat: after claim click, URL:', page.url());
       claimed = true;
     } else {
-      console.log('sharedchat: claim button not found, checking page state');
+      console.log('sharedchat: claim button not found');
       // Check if already claimed by looking at page text
-      const pageText = await page.evaluate(() => document.body.innerText);
-      if (pageText.includes('已达上限') || pageText.includes('已领取')) {
-        console.log('sharedchat: already claimed today');
-        claimed = true;
-      }
+      try {
+        const pageText = await page.evaluate(() => document.body.innerText);
+        if (pageText.includes('已达上限') || pageText.includes('已领取')) {
+          console.log('sharedchat: already claimed today');
+          claimed = true;
+        }
+      } catch(e) {}
     }
 
     // Save cookies
