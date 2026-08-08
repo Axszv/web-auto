@@ -1,5 +1,5 @@
-// sites/agentrouter.js — 使用 Chromium，通过 page.request 发送 API 请求
-const { chromium } = require('playwright');
+// sites/agentrouter.js — 使用 sing-box VLESS 代理绕过 Cloudflare/WAF
+const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
@@ -19,11 +19,13 @@ async function run(config = {}) {
   const GH_USER = config.GH_USER || process.env.GH_USER || '';
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
+  const PROXY = { server: 'http://127.0.0.1:1080' };
 
-  console.log('agentrouter: launching chromium...');
-  const browser = await chromium.launch({
+  console.log('agentrouter: launching firefox via proxy...');
+  const browser = await firefox.launch({
     headless: false,
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled']
+    args: ['--no-sandbox'],
+    proxy: PROXY
   });
 
   const ctx = await browser.newContext({
@@ -36,9 +38,6 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-    Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
-    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
-    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
   });
 
   // 恢复 session cookie
@@ -51,14 +50,22 @@ async function run(config = {}) {
     }
   }
 
+  await ctx.clearCookies();
+  if (existingCookies.agentrouter) {
+    const sessionCookies = existingCookies.agentrouter.filter(c => c.name === 'session');
+    if (sessionCookies.length > 0) {
+      await ctx.addCookies(sessionCookies);
+    }
+  }
+
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('agentrouter: navigating to console...');
-    await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(3000);
+    console.log('agentrouter: navigating to console via proxy...');
+    await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await sleep(5000);
     console.log('agentrouter URL:', page.url());
 
     const loggedIn = !page.url().includes('login');
@@ -77,10 +84,16 @@ async function run(config = {}) {
     if (await githubBtn.count() === 0) githubBtn = page.locator('text=Continue with GitHub');
     if (await githubBtn.count() === 0) githubBtn = page.locator('.semi-icon-github_logo');
 
+    console.log('agentrouter: found GitHub button:', await githubBtn.count());
+
     if (await githubBtn.count() > 0) {
+      console.log('agentrouter: clicking GitHub OAuth button...');
       await githubBtn.first().click({ force: true });
       await sleep(5000);
+      console.log('agentrouter after click, URL:', page.url());
+
       if (page.url().includes('github.com')) {
+        console.log('agentrouter: on GitHub page');
         if (page.url().includes('/login')) {
           await page.locator('input[name="login"]').first().fill(GH_USER);
           await page.locator('input[name="password"]').first().fill(GH_PASS);
@@ -93,6 +106,16 @@ async function run(config = {}) {
               if (await authBtn.count() > 0) await authBtn.click({ force: true });
             } catch(e) {}
             await sleep(5000);
+            loggedIn = !page.url().includes('login');
+          }
+        } else {
+          try {
+            await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+            const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+            if (await authBtn.count() > 0) await authBtn.click({ force: true });
+            await sleep(5000);
+            loggedIn = !page.url().includes('login');
+          } catch(e) {
             loggedIn = !page.url().includes('login');
           }
         }
@@ -121,13 +144,11 @@ async function run(config = {}) {
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
-    // 使用 page.request 发送请求（使用浏览器的 cookie）
     const cookies = await ctx.cookies(BASE);
     const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
     console.log('agentrouter: cookie count:', cookies.length);
     console.log('agentrouter: cookie names:', cookies.map(c => c.name).join(', '));
 
-    // 获取 before balance
     let beforeBalance = null;
     try {
       const infoResp = await page.request.get(BASE + '/api/user/info', {
@@ -144,7 +165,6 @@ async function doCheckin(page, ctx, BASE) {
       }
     } catch(e) { console.log('agentrouter: failed to get before balance:', e.message); }
 
-    // 执行签到
     let checkinResult = null;
     try {
       const checkinResp = await page.request.post(BASE + '/api/user/checkin', {
@@ -160,7 +180,6 @@ async function doCheckin(page, ctx, BASE) {
       }
     } catch(e) { console.log('agentrouter: checkin error:', e.message); }
 
-    // 获取 after balance
     let afterBalance = null;
     try {
       const infoResp2 = await page.request.get(BASE + '/api/user/info', {
@@ -177,7 +196,6 @@ async function doCheckin(page, ctx, BASE) {
       }
     } catch(e) { console.log('agentrouter: failed to get after balance:', e.message); }
 
-    // 判断签到成功
     if (checkinResult) {
       if (checkinResult.code === 200 || checkinResult.success === true ||
           (checkinResult.message && checkinResult.message.includes('成功'))) {
