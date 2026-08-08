@@ -41,8 +41,9 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  const saved = await loadCookies();
-  if (saved.anyrouter && saved.anyrouter.length > 0) await ctx.addCookies(saved.anyrouter);
+  // 清除旧 cookies，强制重新登录
+  console.log('anyrouter: clearing old cookies...');
+  await ctx.clearCookies();
 
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
@@ -60,24 +61,25 @@ async function run(config = {}) {
     console.log('anyrouter URL:', url);
 
     let checkinSuccess = false;
+    let loggedIn = false;
 
     if (url.includes('login') || url.includes('oauth')) {
-      console.log('anyrouter: not logged in');
+      console.log('anyrouter: not logged in, navigating to login...');
       await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
       await sleep(3000);
       console.log('anyrouter login page URL:', page.url());
 
-      const hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
+      // 检查是否有 GitHub OAuth 按钮
+      const hasGitHubBtn = await page.evaluate(() => {
+        const svg = document.querySelector('[aria-label="github_logo"]');
+        return !!svg;
+      });
       console.log('anyrouter: has GitHub button:', hasGitHubBtn);
 
       if (hasGitHubBtn) {
-        await page.evaluate(() => {
-          const svg = document.querySelector('[aria-label="github_logo"]');
-          if (svg) {
-            const btn = svg.closest('button') || svg.parentElement?.closest('button');
-            if (btn) btn.click();
-          }
-        });
+        console.log('anyrouter: clicking GitHub OAuth button...');
+        // 使用 page.click 而不是 evaluate 来确保点击事件正确触发
+        await page.locator('[aria-label="github_logo"]').first().click();
         await sleep(3000);
         console.log('anyrouter after click, URL:', page.url());
 
@@ -108,10 +110,13 @@ async function run(config = {}) {
 
         await sleep(5000);
         console.log('anyrouter: final URL:', page.url());
+        loggedIn = !page.url().includes('login');
       }
+    } else {
+      loggedIn = true;
     }
 
-    if (!page.url().includes('login')) {
+    if (loggedIn) {
       console.log('anyrouter: logged in!');
       try {
         const cookies = await ctx.cookies(BASE);
