@@ -52,8 +52,6 @@ jobs:
           if kill -0 $(cat /tmp/singbox.pid) 2>/dev/null; then
             echo "sing-box started successfully"
             curl -s --max-time 5 http://127.0.0.1:1080/ -o /dev/null && echo "proxy port 1080 OK"
-            curl -s --max-time 10 -x http://127.0.0.1:1080 -o /dev/null -w "agentrouter via proxy: %{http_code}\n" https://agentrouter.org/
-            curl -s --max-time 10 -x http://127.0.0.1:1080 -o /dev/null -w "anyrouter via proxy: %{http_code}\n" https://anyrouter.top/
           else
             echo "sing-box failed to start:"
             cat /tmp/sing-box.log
