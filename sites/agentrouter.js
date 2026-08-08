@@ -1,4 +1,4 @@
-// sites/agentrouter.js — 使用住宅代理绕过Cloudflare
+// sites/agentrouter.js — 使用HTTP代理绕过Cloudflare
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,8 +20,8 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
 
-  // 使用 SOCKS5 代理绕过 Cloudflare（来自 oxylabs/free-proxy）
-  const PROXY = { server: 'socks5://proxy.oxylabs.io:55000', username: 'lkjh5_4gW1v', password: 'Lz1979474206_' };
+  // oxylabs免费住宅代理
+  const PROXY = { server: 'http://proxy.oxylabs.io:55000', username: 'lkjh5_4gW1v', password: 'Lz1979474206_' };
 
   const browser = await firefox.launch({
     headless: false,
@@ -49,7 +49,7 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('agentrouter: navigating to login via proxy...');
+    console.log('agentrouter: navigating via proxy...');
     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
     console.log('agentrouter URL:', page.url());
@@ -58,11 +58,7 @@ async function run(config = {}) {
     console.log('agentrouter page text:', pageText.substring(0, 300));
 
     if (pageText.includes('Access Verification') || pageText.includes('verification')) {
-      console.log('agentrouter: still blocked by verification, checking if slider exists...');
-      const hasSlider = await page.evaluate(() => {
-        return !!document.querySelector('.geetest_track, [class*="geetest"], [class*="slide"], [class*="captcha"]');
-      });
-      console.log('agentrouter: has slider:', hasSlider);
+      console.log('agentrouter: still blocked by verification');
     }
 
     const hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
