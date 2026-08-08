@@ -20,7 +20,6 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
-  // 使用 sing-box 本地 HTTP 代理 (port 1080)
   const PROXY = { server: 'http://127.0.0.1:1080' };
 
   const browser = await firefox.launch({
@@ -55,19 +54,16 @@ async function run(config = {}) {
     await sleep(5000);
     console.log('anyrouter after main:', page.url());
 
-    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(3000);
-    let url = page.url();
-    console.log('anyrouter URL:', url);
-
     let checkinSuccess = false;
     let loggedIn = false;
 
-    if (url.includes('login') || url.includes('oauth')) {
-      console.log('anyrouter: not logged in, navigating to login...');
-      await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // 检查当前 URL，如果在登录页则处理登录
+    let currentUrl = page.url();
+    console.log('anyrouter current URL:', currentUrl);
+
+    if (currentUrl.includes('login') || currentUrl.includes('oauth')) {
+      console.log('anyrouter: on login page');
       await sleep(3000);
-      console.log('anyrouter login page URL:', page.url());
 
       // 检查是否有 GitHub OAuth 按钮
       const hasGitHubBtn = await page.evaluate(() => {
@@ -78,7 +74,6 @@ async function run(config = {}) {
 
       if (hasGitHubBtn) {
         console.log('anyrouter: clicking GitHub OAuth button...');
-        // 使用 page.click 而不是 evaluate 来确保点击事件正确触发
         await page.locator('[aria-label="github_logo"]').first().click();
         await sleep(3000);
         console.log('anyrouter after click, URL:', page.url());
@@ -112,8 +107,21 @@ async function run(config = {}) {
         console.log('anyrouter: final URL:', page.url());
         loggedIn = !page.url().includes('login');
       }
-    } else {
-      loggedIn = true;
+    }
+
+    // 如果已登录或不需要登录，访问控制台
+    if (loggedIn || !currentUrl.includes('login')) {
+      console.log('anyrouter: navigating to console...');
+      try {
+        await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await sleep(3000);
+        console.log('anyrouter console URL:', page.url());
+      } catch (e) {
+        console.log('anyrouter: console navigation error:', e.message);
+      }
+
+      // 检查是否在控制台页面（已登录）
+      loggedIn = !page.url().includes('login');
     }
 
     if (loggedIn) {
@@ -122,7 +130,7 @@ async function run(config = {}) {
         const cookies = await ctx.cookies(BASE);
         const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
 
-        // 先获取签到前余额
+        // 获取签到前余额
         let beforeBalance = null;
         try {
           const infoResp = await page.request.get(BASE + '/api/user/info', {
@@ -133,7 +141,9 @@ async function run(config = {}) {
             beforeBalance = info.data?.balance || info.data?.credits || info.balance || info.credits;
             console.log('anyrouter: balance before checkin:', beforeBalance);
           }
-        } catch(e) {}
+        } catch(e) {
+          console.log('anyrouter: failed to get before balance');
+        }
 
         // 签到
         const cr = await page.evaluate(async () => {
@@ -153,7 +163,9 @@ async function run(config = {}) {
             afterBalance = info2.data?.balance || info2.data?.credits || info2.balance || info2.credits;
             console.log('anyrouter: balance after checkin:', afterBalance);
           }
-        } catch(e) {}
+        } catch(e) {
+          console.log('anyrouter: failed to get after balance');
+        }
 
         // 判断签到是否成功
         if (cr && (cr.code === 200 || cr.success === true || cr.message?.includes('成功'))) {
@@ -172,7 +184,7 @@ async function run(config = {}) {
         console.log('anyrouter checkin error:', e.message);
       }
     } else {
-      console.log('anyrouter: still on login page');
+      console.log('anyrouter: still on login page or not logged in');
     }
 
     const cookies = await ctx.cookies(BASE);
