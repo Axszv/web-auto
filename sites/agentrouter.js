@@ -1,4 +1,4 @@
-// sites/agentrouter.js — 尝试多种策略绕过Cloudflare
+// sites/agentrouter.js — 使用住宅代理绕过Cloudflare
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -15,96 +15,22 @@ async function saveCookies(data) {
   fs.writeFileSync(path.join(__dirname, '..', 'cookies.json'), JSON.stringify(data, null, 2), 'utf8');
 }
 
-async function trySlideCaptcha(page, maxAttempts = 5) {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      // Look for the slider track
-      const track = page.locator('.geetest_track, .fc-button, [class*="geetest"], [class*="slide"], [class*="verification"], [class*="captcha"]').first();
-      if (await track.count() > 0) {
-        console.log('agentrouter: found captcha slider, attempting...');
-        // Get track and handle element positions
-        const trackBox = await track.boundingBox();
-        if (trackBox) {
-          // Try to find the handle/thumb
-          const handle = track.locator('.geetest_slider_button, .handle, [class*="handler"], [class*="thumb"]').first();
-          if (await handle.count() > 0) {
-            // Drag the handle
-            const handleBox = await handle.boundingBox();
-            if (handleBox) {
-              const targetX = trackBox.x + trackBox.width - 10;
-              await handle.dragTo(handle, { targetPosition: { x: targetX, y: handleBox.y + handleBox.height / 2 } });
-              await sleep(1000);
-              console.log('agentrouter: slider attempt', i + 1, 'done');
-              return true;
-            }
-          }
-        }
-      }
-
-      // Alternative: try to find and interact with any visible slider
-      const hasSlider = await page.evaluate(() => {
-        const sliders = document.querySelectorAll('[class*="slide"], [class*="geetest"], [class*="captcha"], [class*="verify"]');
-        for (const el of sliders) {
-          const style = window.getComputedStyle(el);
-          if (style.display !== 'none' && el.offsetWidth > 50) return true;
-        }
-        return false;
-      });
-
-      if (!hasSlider) break;
-
-      // Try JavaScript-based slide
-      await page.evaluate(() => {
-        // Find geetest slider
-        const track = document.querySelector('.geetest_track');
-        const handler = document.querySelector('.geetest_slider_button') || document.querySelector('.handle');
-        if (track && handler) {
-          const rect = track.getBoundingClientRect();
-          const handlerRect = handler.getBoundingClientRect();
-          const startX = handlerRect.left + handlerRect.width / 2;
-          const startY = handlerRect.top + handlerRect.height / 2;
-          const endX = rect.right - 5;
-          const endY = startY;
-
-          // Dispatch mouse events
-          const events = [
-            { type: 'mousedown', x: startX, y: startY },
-            { type: 'mousemove', x: endX, y: endY, buttons: 1 },
-            { type: 'mouseup', x: endX, y: endY }
-          ];
-          for (const e of events) {
-            const rect = document.elementFromPoint(e.x, e.y)?.getBoundingClientRect();
-            if (rect) {
-              const evt = new MouseEvent(e.type, {
-                bubbles: true, cancelable: true,
-                clientX: e.x, clientY: e.y,
-                button: 0, buttons: e.buttons || 0
-              });
-              document.elementFromPoint(e.x, e.y)?.dispatchEvent(evt);
-            }
-          }
-        }
-      });
-      await sleep(1500);
-    } catch (e) {
-      console.log('agentrouter: captcha attempt', i + 1, 'failed:', e.message);
-    }
-  }
-  return false;
-}
-
 async function run(config = {}) {
   const GH_USER = config.GH_USER || process.env.GH_USER || '';
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
 
+  // 使用 SOCKS5 代理绕过 Cloudflare（来自 oxylabs/free-proxy）
+  const PROXY = { server: 'socks5://proxy.oxylabs.io:55000', username: 'lkjh5_4gW1v', password: 'Lz1979474206_' };
+
   const browser = await firefox.launch({
     headless: false,
-    args: ['--no-sandbox']
+    args: ['--no-sandbox'],
+    proxy: PROXY
   });
 
   const ctx = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
     locale: 'en-US'
   });
@@ -115,7 +41,6 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  // 先加载旧cookies
   const saved = await loadCookies();
   if (saved.agentrouter && saved.agentrouter.length > 0) await ctx.addCookies(saved.agentrouter);
 
@@ -124,42 +49,26 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('agentrouter: navigating to login...');
+    console.log('agentrouter: navigating to login via proxy...');
     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
     console.log('agentrouter URL:', page.url());
 
-    // Check for Cloudflare verification
-    let pageText = await page.evaluate(() => document.body.innerText);
+    const pageText = await page.evaluate(() => document.body.innerText);
     console.log('agentrouter page text:', pageText.substring(0, 300));
 
-    if (pageText.includes('Access Verification') || pageText.includes('verification') || pageText.includes('sliding')) {
-      console.log('agentrouter: Cloudflare verification detected, trying to solve...');
-      // Try to find and interact with the captcha
-      const solved = await trySlideCaptcha(page);
-      if (!solved) {
-        // Wait longer and retry
-        await sleep(5000);
-        pageText = await page.evaluate(() => document.body.innerText);
-        console.log('agentrouter after captcha wait:', pageText.substring(0, 300));
-      }
+    if (pageText.includes('Access Verification') || pageText.includes('verification')) {
+      console.log('agentrouter: still blocked by verification, checking if slider exists...');
+      const hasSlider = await page.evaluate(() => {
+        return !!document.querySelector('.geetest_track, [class*="geetest"], [class*="slide"], [class*="captcha"]');
+      });
+      console.log('agentrouter: has slider:', hasSlider);
     }
-
-    // Check if we passed Cloudflare
-    const currentUrl = page.url();
-    if (!currentUrl.includes('login') && !currentUrl.includes('verification')) {
-      console.log('agentrouter: passed Cloudflare, URL:', currentUrl);
-    }
-
-    // Now check for login page content
-    pageText = await page.evaluate(() => document.body.innerText);
-    console.log('agentrouter page text:', pageText.substring(0, 300));
 
     const hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
     console.log('agentrouter: has GitHub button:', hasGitHubBtn);
 
     if (hasGitHubBtn) {
-      // Click GitHub button
       await page.evaluate(() => {
         const svg = document.querySelector('[aria-label="github_logo"]');
         if (svg) {
