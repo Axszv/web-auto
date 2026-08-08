@@ -124,6 +124,7 @@ async function run(config = {}) {
         const cookies = await ctx.cookies(BASE);
         const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
 
+        // 获取签到前余额
         let beforeBalance = null;
         try {
           const infoResp = await page.request.get(BASE + '/api/user/info', {
@@ -136,12 +137,14 @@ async function run(config = {}) {
           }
         } catch(e) { console.log('anyrouter: failed to get before balance'); }
 
+        // 签到
         const cr = await page.evaluate(async () => {
           try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
           catch(e) { return { error: e.message }; }
         });
         console.log('anyrouter checkin:', JSON.stringify(cr));
 
+        // 获取签到后余额
         let afterBalance = null;
         try {
           const infoResp2 = await page.request.get(BASE + '/api/user/info', {
@@ -154,6 +157,7 @@ async function run(config = {}) {
           }
         } catch(e) { console.log('anyrouter: failed to get after balance'); }
 
+        // 判断签到是否成功
         if (cr && (cr.code === 200 || cr.success === true || cr.message?.includes('成功'))) {
           checkinSuccess = true;
           console.log('anyrouter: checkin successful (API returned success)');
