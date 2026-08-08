@@ -1,4 +1,4 @@
-// sites/agentrouter.js — 使用 sing-box VLESS 代理绕过 Cloudflare
+// sites/agentrouter.js — 直接访问（无需代理）
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,12 +20,9 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
 
-  const PROXY = { server: 'http://127.0.0.1:1080' };
-
   const browser = await firefox.launch({
     headless: false,
     args: ['--no-sandbox'],
-    proxy: PROXY
   });
 
   const ctx = await browser.newContext({
@@ -48,16 +45,15 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('agentrouter: navigating via sing-box proxy...');
-    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    console.log('agentrouter: navigating...');
+    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 60000 });
     await sleep(5000);
     console.log('agentrouter main page URL:', page.url());
 
     let loggedIn = false;
 
-    // 查找 GitHub 按钮（可能在主页或登录页）
-    let githubBtn = null;
-    githubBtn = page.locator('[aria-label="github_logo"]');
+    // 查找 GitHub 按钮
+    let githubBtn = page.locator('[aria-label="github_logo"]');
     if (await githubBtn.count() === 0) {
       githubBtn = page.locator('text=Continue with GitHub');
     }
@@ -68,7 +64,6 @@ async function run(config = {}) {
     console.log('agentrouter main page has GitHub button:', await githubBtn.count() > 0);
 
     if (await githubBtn.count() === 0) {
-      // 点击 Sign in 按钮进入登录页
       console.log('agentrouter: clicking Sign in button...');
       const signInBtn = page.locator('text=Sign in, text=Log In').first();
       if (await signInBtn.count() > 0) {
@@ -77,7 +72,6 @@ async function run(config = {}) {
         console.log('agentrouter after Sign in, URL:', page.url());
       }
 
-      // 重新查找 GitHub 按钮
       githubBtn = page.locator('[aria-label="github_logo"]');
       if (await githubBtn.count() === 0) {
         githubBtn = page.locator('text=Continue with GitHub');
@@ -90,7 +84,6 @@ async function run(config = {}) {
 
     if (await githubBtn.count() > 0) {
       console.log('agentrouter: clicking GitHub OAuth button...');
-      // 使用 force: true 点击，绕过可能的遮挡
       await githubBtn.first().click({ force: true });
       await sleep(5000);
       console.log('agentrouter after click, URL:', page.url());
@@ -131,7 +124,7 @@ async function run(config = {}) {
       }
     } else {
       console.log('agentrouter: no GitHub button found');
-      await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(BASE + '/console', { waitUntil: 'networkidle', timeout: 30000 });
       await sleep(3000);
       loggedIn = !page.url().includes('login');
       console.log('agentrouter: logged in status:', loggedIn);
