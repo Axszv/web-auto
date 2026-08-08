@@ -1,4 +1,4 @@
-// sites/agentrouter.js — 使用 sing-box 代理 + Chromium，获取 OAuth state
+// sites/agentrouter.js — 使用 sing-box 代理 + Chromium，保留 session cookie
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -40,14 +40,11 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  // 恢复 session cookie
+  // 加载现有 cookies（不清除，保留 session）
   const existingCookies = await loadCookies();
-  if (existingCookies.agentrouter) {
-    const sessionCookies = existingCookies.agentrouter.filter(c => c.name === 'session');
-    if (sessionCookies.length > 0) {
-      await ctx.addCookies(sessionCookies);
-      console.log('agentrouter: restored session cookie');
-    }
+  if (existingCookies.agentrouter && existingCookies.agentrouter.length > 0) {
+    await ctx.addCookies(existingCookies.agentrouter);
+    console.log('agentrouter: restored existing cookies');
   }
 
   const page = await ctx.newPage();
@@ -55,20 +52,12 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
   page.on('response', async resp => {
     if (resp.url().includes('api/')) {
-      const status = resp.status();
-      const contentType = resp.headers()['content-type'] || '';
-      console.log(`[API] ${resp.url()} -> ${status} (${contentType.substring(0, 50)})`);
-      if (status === 200 && contentType.includes('json')) {
-        try {
-          const body = await resp.text();
-          console.log(`[API Response] ${body.substring(0, 300)}`);
-        } catch(e) {}
-      }
+      console.log(`[API] ${resp.url()} -> ${resp.status()} (${resp.headers()['content-type'] || 'unknown'})`);
     }
   });
 
   try {
-    // 先尝试访问 console
+    // 先尝试访问 console（保留 session cookie）
     console.log('agentrouter: navigating to /console via proxy...');
     await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 90000 });
     await sleep(5000);
@@ -78,44 +67,27 @@ async function run(config = {}) {
     console.log('agentrouter: logged in status:', loggedIn);
 
     if (!loggedIn) {
-      // 获取 OAuth state
-      console.log('agentrouter: getting OAuth state...');
-      const oauthState = await page.evaluate(async () => {
-        try {
-          const resp = await fetch('/api/oauth/state?mode=login', { method: 'GET', credentials: 'include' });
-          if (resp.ok) {
-            const data = await resp.json();
-            return data;
-          }
-        } catch(e) {}
-        return null;
-      });
-      console.log('agentrouter: OAuth state:', JSON.stringify(oauthState));
+      // 尝试 OAuth
+      console.log('agentrouter: trying /oauth/github...');
+      await page.goto(BASE + '/oauth/github', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(5000);
+      console.log('agentrouter oauth URL:', page.url());
 
-      if (oauthState && oauthState.state) {
-        // 构造 GitHub OAuth URL
-        const githubUrl = `https://github.com/login/oauth/authorize?client_id=Ov23liwqF4o0LXkK2yGg&state=${oauthState.state}`;
-        console.log('agentrouter: navigating to GitHub OAuth...');
-        await page.goto(githubUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await sleep(3000);
-        console.log('agentrouter after GitHub OAuth redirect, URL:', page.url());
-
-        if (page.url().includes('github.com')) {
-          console.log('agentrouter: on GitHub page');
-          if (page.url().includes('/login')) {
-            await page.locator('input[name="login"]').first().fill(GH_USER);
-            await page.locator('input[name="password"]').first().fill(GH_PASS);
-            await page.locator('input[type="submit"]').first().click();
-            await sleep(2000);
-            if (!page.url().includes('/login')) {
-              try {
-                await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-                const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-                if (await authBtn.count() > 0) await authBtn.click({ force: true });
-              } catch(e) {}
-              await sleep(5000);
-              loggedIn = !page.url().includes('login');
-            }
+      if (page.url().includes('github.com')) {
+        console.log('agentrouter: on GitHub page');
+        if (page.url().includes('/login')) {
+          await page.locator('input[name="login"]').first().fill(GH_USER);
+          await page.locator('input[name="password"]').first().fill(GH_PASS);
+          await page.locator('input[type="submit"]').first().click();
+          await sleep(2000);
+          if (!page.url().includes('/login')) {
+            try {
+              await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+              const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+              if (await authBtn.count() > 0) await authBtn.click({ force: true });
+            } catch(e) {}
+            await sleep(5000);
+            loggedIn = !page.url().includes('login');
           }
         }
       }
