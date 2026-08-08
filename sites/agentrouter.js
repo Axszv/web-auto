@@ -1,4 +1,4 @@
-// sites/agentrouter.js — 使用 sing-box 代理 + Chromium，通过 page.evaluate 调用 API
+// sites/agentrouter.js — 尝试多种方式获取 OAuth URL
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -40,7 +40,6 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  // 加载现有 cookies
   const existingCookies = await loadCookies();
   if (existingCookies.agentrouter && existingCookies.agentrouter.length > 0) {
     await ctx.addCookies(existingCookies.agentrouter);
@@ -50,73 +49,111 @@ async function run(config = {}) {
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
+  page.on('response', async resp => {
+    if (resp.url().includes('api/') || resp.url().includes('oauth')) {
+      console.log(`[API] ${resp.url()} -> ${resp.status()} (${resp.headers()['content-type'] || 'unknown'})`);
+    }
+  });
 
   try {
-    console.log('agentrouter: navigating to /console via proxy...');
-    await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 90000 });
+    console.log('agentrouter: navigating to /login via proxy...');
+    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 90000 });
     await sleep(5000);
     console.log('agentrouter URL:', page.url());
 
-    let loggedIn = !page.url().includes('login');
-    console.log('agentrouter: logged in status:', loggedIn);
+    // 尝试多种方式获取 OAuth URL
+    console.log('agentrouter: trying to get OAuth URL...');
+    const oauthInfo = await page.evaluate(async () => {
+      const results = {};
 
-    if (!loggedIn) {
-      // 尝试 OAuth
-      console.log('agentrouter: trying /oauth/github...');
-      await page.goto(BASE + '/oauth/github', { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(5000);
-      console.log('agentrouter oauth URL:', page.url());
-
-      if (page.url().includes('github.com')) {
-        console.log('agentrouter: on GitHub page');
-        if (page.url().includes('/login')) {
-          await page.locator('input[name="login"]').first().fill(GH_USER);
-          await page.locator('input[name="password"]').first().fill(GH_PASS);
-          await page.locator('input[type="submit"]').first().click();
-          await sleep(2000);
-          if (!page.url().includes('/login')) {
-            try {
-              await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-              const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-              if (await authBtn.count() > 0) await authBtn.click({ force: true });
-            } catch(e) {}
-            await sleep(5000);
-            loggedIn = !page.url().includes('login');
+      // 方法1: 获取按钮信息
+      const btn = document.querySelector('[aria-label="github_logo"]') ||
+                  document.querySelector('.semi-icon-github_logo') ||
+                  document.querySelector('text=Continue with GitHub');
+      if (btn) {
+        results.foundBtn = true;
+        results.btnClassName = btn.className;
+        results.btnTagName = btn.tagName;
+        // 检查所有父级 a 标签
+        let parent = btn.parentElement;
+        while (parent) {
+          if (parent.tagName === 'A' && parent.href && parent.href !== 'about:blank') {
+            results.href = parent.href;
+            break;
           }
+          parent = parent.parentElement;
         }
+        // 检查 onclick
+        results.onclick = btn.getAttribute('onclick');
       }
 
-      if (!loggedIn) {
-        let githubBtn = page.locator('[aria-label="github_logo"]');
-        if (await githubBtn.count() === 0) githubBtn = page.locator('text=Continue with GitHub');
-        if (await githubBtn.count() === 0) githubBtn = page.locator('.semi-icon-github_logo');
-
-        console.log('agentrouter: found GitHub button:', await githubBtn.count());
-
-        if (await githubBtn.count() > 0) {
-          console.log('agentrouter: clicking GitHub OAuth button...');
-          await githubBtn.first().click({ force: true });
-          await sleep(5000);
-          console.log('agentrouter: after click, URL:', page.url());
-
-          if (page.url().includes('github.com')) {
-            if (page.url().includes('/login')) {
-              await page.locator('input[name="login"]').first().fill(GH_USER);
-              await page.locator('input[name="password"]').first().fill(GH_PASS);
-              await page.locator('input[type="submit"]').first().click();
-              await sleep(2000);
-              if (!page.url().includes('/login')) {
-                try {
-                  await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-                  const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-                  if (await authBtn.count() > 0) await authBtn.click({ force: true });
-                } catch(e) {}
-                await sleep(5000);
-                loggedIn = !page.url().includes('login');
-              }
-            }
-          }
+      // 方法2: 尝试 API
+      try {
+        const resp = await fetch('/api/oauth/state?mode=login', { credentials: 'include' });
+        if (resp.ok) {
+          const data = await resp.json();
+          results.oauthState = data;
         }
+      } catch(e) {}
+
+      return results;
+    });
+
+    console.log('agentrouter: oauth info:', JSON.stringify(oauthInfo).substring(0, 500));
+
+    let loggedIn = false;
+
+    if (oauthInfo.href && oauthInfo.href.includes('github')) {
+      console.log('agentrouter: navigating to:', oauthInfo.href);
+      await page.goto(oauthInfo.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(3000);
+    } else if (oauthInfo.oauthState && oauthInfo.oauthState.state) {
+      // 构造 GitHub OAuth URL
+      const githubUrl = `https://github.com/login/oauth/authorize?client_id=Ov23liwqF4o0LXkK2yGg&state=${oauthInfo.oauthState.state}`;
+      console.log('agentrouter: navigating to GitHub OAuth:', githubUrl);
+      await page.goto(githubUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(3000);
+    }
+
+    if (page.url().includes('github.com')) {
+      console.log('agentrouter: on GitHub page');
+      if (page.url().includes('/login')) {
+        await page.locator('input[name="login"]').first().fill(GH_USER);
+        await page.locator('input[name="password"]').first().fill(GH_PASS);
+        await page.locator('input[type="submit"]').first().click();
+        await sleep(2000);
+        if (!page.url().includes('/login')) {
+          try {
+            await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+            const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+            if (await authBtn.count() > 0) await authBtn.click({ force: true });
+          } catch(e) {}
+          await sleep(5000);
+          loggedIn = !page.url().includes('login');
+        }
+      }
+    }
+
+    if (!loggedIn && oauthInfo.foundBtn) {
+      console.log('agentrouter: clicking button via JS...');
+      await page.evaluate(() => {
+        const btn = document.querySelector('[aria-label="github_logo"]') ||
+                    document.querySelector('.semi-icon-github_logo');
+        if (btn) btn.click();
+      });
+      await sleep(5000);
+      console.log('agentrouter: after JS click, URL:', page.url());
+      if (page.url().includes('github.com')) {
+        loggedIn = true;
+      }
+    }
+
+    if (loggedIn || page.url().includes('github.com')) {
+      if (page.url().includes('github.com') && page.url().includes('authorize')) {
+        const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+        if (await authBtn.count() > 0) await authBtn.click({ force: true });
+        await sleep(5000);
+        loggedIn = !page.url().includes('login');
       }
     }
 
@@ -143,80 +180,42 @@ async function run(config = {}) {
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
-    // 使用 page.evaluate + fetch 来调用 API（复用浏览器 session）
     const result = await page.evaluate(async () => {
       const results = {};
-
-      // Get before balance
       try {
-        const resp1 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
-        const text1 = await resp1.text();
-        try { results.before = JSON.parse(text1); }
-        catch(e) { results.beforeText = text1.substring(0, 300); }
-        results.beforeStatus = resp1.status;
+        const r1 = await fetch('/api/user/info', { credentials: 'include' });
+        const t1 = await r1.text();
+        try { results.before = JSON.parse(t1); } catch(e) { results.beforeText = t1.substring(0, 200); }
+        results.beforeStatus = r1.status;
       } catch(e) { results.beforeError = e.message; }
-
-      // Checkin
       try {
-        const resp2 = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
-        const text2 = await resp2.text();
-        try { results.checkin = JSON.parse(text2); }
-        catch(e) { results.checkinText = text2.substring(0, 300); }
-        results.checkinStatus = resp2.status;
+        const r2 = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
+        const t2 = await r2.text();
+        try { results.checkin = JSON.parse(t2); } catch(e) { results.checkinText = t2.substring(0, 200); }
+        results.checkinStatus = r2.status;
       } catch(e) { results.checkinError = e.message; }
-
-      // Get after balance
       try {
-        const resp3 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
-        const text3 = await resp3.text();
-        try { results.after = JSON.parse(text3); }
-        catch(e) { results.afterText = text3.substring(0, 300); }
-        results.afterStatus = resp3.status;
+        const r3 = await fetch('/api/user/info', { credentials: 'include' });
+        const t3 = await r3.text();
+        try { results.after = JSON.parse(t3); } catch(e) { results.afterText = t3.substring(0, 200); }
+        results.afterStatus = r3.status;
       } catch(e) { results.afterError = e.message; }
-
       return results;
     });
 
-    console.log('agentrouter: API result:', JSON.stringify(result).substring(0, 800));
+    console.log('agentrouter: checkin result:', JSON.stringify(result).substring(0, 600));
 
-    let beforeBalance = null;
-    let afterBalance = null;
+    let beforeBalance = result.before?.data?.balance || result.before?.balance;
+    let afterBalance = result.after?.data?.balance || result.after?.balance;
+    console.log('agentrouter: balance before:', beforeBalance, 'after:', afterBalance);
 
-    if (result.before) {
-      beforeBalance = result.before.data?.balance || result.before.data?.credits ||
-                      result.before.balance || result.before.credits;
+    if (result.checkin && (result.checkin.code === 200 || result.checkin.success)) {
+      checkinSuccess = true;
     }
-    console.log('agentrouter: balance before:', beforeBalance);
-
-    if (result.after) {
-      afterBalance = result.after.data?.balance || result.after.data?.credits ||
-                     result.after.balance || result.after.credits;
-    }
-    console.log('agentrouter: balance after:', afterBalance);
-
-    if (result.checkin) {
-      if (result.checkin.code === 200 || result.checkin.success === true ||
-          (result.checkin.message && result.checkin.message.includes('成功'))) {
-        checkinSuccess = true;
-        console.log('agentrouter: checkin successful');
-      }
-    }
-    if (beforeBalance !== null && afterBalance !== null) {
-      const diff = afterBalance - beforeBalance;
-      console.log('agentrouter: balance change:', diff);
-      if (diff >= 25) {
-        checkinSuccess = true;
-        console.log('agentrouter: balance increased by', diff, '-> success!');
-      }
-    }
-
-    if (!checkinSuccess) {
-      console.log('agentrouter: before status:', result.beforeStatus, 'checkin status:', result.checkinStatus, 'after status:', result.afterStatus);
-      console.log('agentrouter: before text:', (result.beforeText || '').substring(0, 200));
-      console.log('agentrouter: checkin text:', (result.checkinText || '').substring(0, 200));
+    if (beforeBalance !== null && afterBalance !== null && afterBalance - beforeBalance >= 25) {
+      checkinSuccess = true;
     }
   } catch(e) { console.log('agentrouter checkin error:', e.message); }
-
   return checkinSuccess;
 }
 
