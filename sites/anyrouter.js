@@ -40,7 +40,6 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  // 清除旧 cookies，强制重新登录
   console.log('anyrouter: clearing old cookies...');
   await ctx.clearCookies();
 
@@ -57,31 +56,27 @@ async function run(config = {}) {
     let checkinSuccess = false;
     let loggedIn = false;
 
-    // 先检查主页是否有登录/注册按钮
-    const pageText = await page.evaluate(() => document.body.innerText);
-    console.log('anyrouter main page text:', pageText.substring(0, 300));
-
-    // 直接访问 login 页面获取 OAuth 按钮
+    // 直接访问 login 页面
     console.log('anyrouter: navigating to /login...');
     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 45000 });
     await sleep(5000);
     console.log('anyrouter login page URL:', page.url());
 
     // 查找 GitHub 按钮
-    let githubBtn = null;
-    githubBtn = page.locator('[aria-label="github_logo"]');
+    let githubBtn = page.locator('[aria-label="github_logo"]');
     if (await githubBtn.count() === 0) {
       githubBtn = page.locator('text=Continue with GitHub');
     }
     if (await githubBtn.count() === 0) {
-      githubBtn = page.locator('svg:has-text("github")');
+      githubBtn = page.locator('.semi-icon-github_logo');
     }
 
     console.log('anyrouter: found GitHub button:', await githubBtn.count());
 
     if (await githubBtn.count() > 0) {
       console.log('anyrouter: clicking GitHub OAuth button...');
-      await githubBtn.first().click();
+      // 使用 force: true 绕过 semi-portal 遮挡
+      await githubBtn.first().click({ force: true });
       await sleep(5000);
       console.log('anyrouter after click, URL:', page.url());
 
@@ -116,14 +111,15 @@ async function run(config = {}) {
         await sleep(5000);
         console.log('anyrouter: final URL:', page.url());
         loggedIn = !page.url().includes('login');
+      } else {
+        console.log('anyrouter: click did not navigate to GitHub');
       }
     } else {
       console.log('anyrouter: no GitHub button found');
-      // 尝试直接访问控制台
       await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 45000 });
       await sleep(5000);
       loggedIn = !page.url().includes('login');
-      console.log('anyrouter: logged in status:', loggedIn, 'URL:', page.url());
+      console.log('anyrouter: logged in status:', loggedIn);
     }
 
     if (loggedIn) {
@@ -132,7 +128,6 @@ async function run(config = {}) {
         const cookies = await ctx.cookies(BASE);
         const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
 
-        // 获取签到前余额
         let beforeBalance = null;
         try {
           const infoResp = await page.request.get(BASE + '/api/user/info', {
@@ -143,18 +138,14 @@ async function run(config = {}) {
             beforeBalance = info.data?.balance || info.data?.credits || info.balance || info.credits;
             console.log('anyrouter: balance before checkin:', beforeBalance);
           }
-        } catch(e) {
-          console.log('anyrouter: failed to get before balance');
-        }
+        } catch(e) { console.log('anyrouter: failed to get before balance'); }
 
-        // 签到
         const cr = await page.evaluate(async () => {
           try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
           catch(e) { return { error: e.message }; }
         });
         console.log('anyrouter checkin:', JSON.stringify(cr));
 
-        // 获取签到后余额
         let afterBalance = null;
         try {
           const infoResp2 = await page.request.get(BASE + '/api/user/info', {
@@ -165,11 +156,8 @@ async function run(config = {}) {
             afterBalance = info2.data?.balance || info2.data?.credits || info2.balance || info2.credits;
             console.log('anyrouter: balance after checkin:', afterBalance);
           }
-        } catch(e) {
-          console.log('anyrouter: failed to get after balance');
-        }
+        } catch(e) { console.log('anyrouter: failed to get after balance'); }
 
-        // 判断签到是否成功
         if (cr && (cr.code === 200 || cr.success === true || cr.message?.includes('成功'))) {
           checkinSuccess = true;
           console.log('anyrouter: checkin successful (API returned success)');
@@ -182,9 +170,7 @@ async function run(config = {}) {
             console.log('anyrouter: balance increased by', diff, '-> checkin successful!');
           }
         }
-      } catch(e) {
-        console.log('anyrouter checkin error:', e.message);
-      }
+      } catch(e) { console.log('anyrouter checkin error:', e.message); }
     } else {
       console.log('anyrouter: still on login page');
     }
