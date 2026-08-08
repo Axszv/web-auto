@@ -14,18 +14,18 @@
     {
       "type": "vless",
       "tag": "vless-out",
-      "server": "104.18.39.209",
+      "server": "REDACTED-HOST",
       "server_port": 443,
-      "uuid": "5cae6713-ede5-4d31-9edb-65537a4607a8",
+      "uuid": "REDACTED",
       "tls": {
         "enabled": true,
-        "server_name": "new.axs.dpdns.org"
+        "server_name": "REDACTED-HOST"
       },
       "transport": {
         "type": "ws",
-        "path": "/?ed=2048",
+        "path": "/?ed=2560",
         "headers": {
-          "Host": "new.axs.dpdns.org"
+          "Host": "REDACTED-HOST"
         }
       }
     },
