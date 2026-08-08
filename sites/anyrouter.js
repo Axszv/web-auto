@@ -1,4 +1,4 @@
-// sites/anyrouter.js — 使用 sing-box VLESS 代理绕过 Cloudflare
+// sites/anyrouter.js — 直接访问（无需代理）
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,12 +20,9 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
-  const PROXY = { server: 'http://127.0.0.1:1080' };
-
   const browser = await firefox.launch({
     headless: false,
     args: ['--no-sandbox'],
-    proxy: PROXY
   });
 
   const ctx = await browser.newContext({
@@ -48,8 +45,8 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('anyrouter: starting via sing-box proxy...');
-    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    console.log('anyrouter: starting...');
+    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 60000 });
     await sleep(8000);
     console.log('anyrouter after main:', page.url());
 
@@ -58,7 +55,7 @@ async function run(config = {}) {
 
     // 直接访问 login 页面
     console.log('anyrouter: navigating to /login...');
-    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.goto(BASE + '/login', { waitUntil: 'networkidle', timeout: 60000 });
     await sleep(5000);
     console.log('anyrouter login page URL:', page.url());
 
@@ -75,7 +72,6 @@ async function run(config = {}) {
 
     if (await githubBtn.count() > 0) {
       console.log('anyrouter: clicking GitHub OAuth button...');
-      // 使用 force: true 绕过 semi-portal 遮挡
       await githubBtn.first().click({ force: true });
       await sleep(5000);
       console.log('anyrouter after click, URL:', page.url());
@@ -116,7 +112,7 @@ async function run(config = {}) {
       }
     } else {
       console.log('anyrouter: no GitHub button found');
-      await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(BASE + '/console', { waitUntil: 'networkidle', timeout: 60000 });
       await sleep(5000);
       loggedIn = !page.url().includes('login');
       console.log('anyrouter: logged in status:', loggedIn);
