@@ -20,7 +20,6 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
 
-  // 先尝试直接访问
   console.log('agentrouter: trying direct access...');
   try {
     const browser = await firefox.launch({ headless: false, args: ['--no-sandbox'] });
@@ -101,6 +100,35 @@ async function runWithProxy(config) {
 async function handleLogin(page, ctx, BASE, browser) {
   let loggedIn = false;
 
+  // 获取页面完整信息
+  const pageInfo = await page.evaluate(() => {
+    const body = document.body.innerText;
+    const buttons = Array.from(document.querySelectorAll('button, a, [role="button"]'))
+      .map(el => ({
+        text: el.innerText?.substring(0, 50),
+        href: el.href,
+        onclick: el.getAttribute('onclick'),
+        className: el.className,
+        ariaLabel: el.getAttribute('aria-label')
+      }))
+      .filter(b => b.text || b.href || b.onclick);
+
+    const githubBtn = document.querySelector('[aria-label="github_logo"]') ||
+                      document.querySelector('.semi-icon-github_logo') ||
+                      document.querySelector('text=Continue with GitHub');
+
+    return {
+      bodyLength: body.length,
+      bodyPreview: body.substring(0, 500),
+      buttons: buttons.slice(0, 20),
+      hasGithubBtn: !!githubBtn
+    };
+  });
+
+  console.log('agentrouter: page body preview:', pageInfo.bodyPreview.substring(0, 200));
+  console.log('agentrouter: has GitHub button:', pageInfo.hasGithubBtn);
+  console.log('agentrouter: buttons:', JSON.stringify(pageInfo.buttons).substring(0, 500));
+
   // 查找 GitHub 按钮
   let githubBtn = page.locator('[aria-label="github_logo"]');
   if (await githubBtn.count() === 0) githubBtn = page.locator('text=Continue with GitHub');
@@ -110,8 +138,51 @@ async function handleLogin(page, ctx, BASE, browser) {
 
   if (await githubBtn.count() > 0) {
     console.log('agentrouter: clicking GitHub OAuth button...');
-    await githubBtn.first().click({ force: true });
-    await sleep(5000);
+
+    // 尝试多种方式获取导航 URL
+    const navUrl = await page.evaluate(() => {
+      const btn = document.querySelector('[aria-label="github_logo"]') ||
+                  document.querySelector('.semi-icon-github_logo');
+      if (!btn) return null;
+
+      // 检查所有父级 a 标签
+      let parent = btn.parentElement;
+      while (parent) {
+        if (parent.tagName === 'A' && parent.href && parent.href !== 'about:blank') {
+          return parent.href;
+        }
+        parent = parent.parentElement;
+      }
+
+      // 检查 onclick
+      const onclick = btn.getAttribute('onclick') || btn.closest('[onclick]')?.getAttribute('onclick');
+      if (onclick) return { onclick, type: 'onclick' };
+
+      // 检查所有事件
+      const all = getEventListeners ? getEventListeners(btn) : null;
+      return { hasOnclick: !!onclick, className: btn.className };
+    });
+
+    console.log('agentrouter: nav URL info:', JSON.stringify(navUrl).substring(0, 300));
+
+    if (navUrl && navUrl.href && navUrl.href.includes('github')) {
+      console.log('agentrouter: navigating to:', navUrl.href);
+      await page.goto(navUrl.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(3000);
+    } else if (navUrl && navUrl.onclick) {
+      console.log('agentrouter: onclick handler:', navUrl.onclick.substring(0, 200));
+      // 执行 onclick
+      await page.evaluate((onclick) => {
+        const btn = document.querySelector('[aria-label="github_logo"]') ||
+                    document.querySelector('.semi-icon-github_logo');
+        if (btn) btn.onclick();
+      }, navUrl.onclick);
+      await sleep(3000);
+    } else {
+      await githubBtn.first().click({ force: true });
+      await sleep(3000);
+    }
+
     console.log('agentrouter after click, URL:', page.url());
 
     if (page.url().includes('github.com')) {
@@ -153,7 +224,6 @@ async function handleLogin(page, ctx, BASE, browser) {
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
-    // 获取 cookies
     const cookies = await ctx.cookies(BASE);
     console.log('agentrouter: cookie count:', cookies.length);
     console.log('agentrouter: cookie names:', cookies.map(c => c.name).join(', '));
@@ -162,7 +232,6 @@ async function doCheckin(page, ctx, BASE) {
     const result = await page.evaluate(async () => {
       const results = {};
 
-      // Get before balance
       try {
         const resp1 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
         const text1 = await resp1.text();
@@ -171,7 +240,6 @@ async function doCheckin(page, ctx, BASE) {
         results.beforeStatus = resp1.status;
       } catch(e) { results.beforeError = e.message; }
 
-      // Checkin
       try {
         const resp2 = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
         const text2 = await resp2.text();
@@ -180,7 +248,6 @@ async function doCheckin(page, ctx, BASE) {
         results.checkinStatus = resp2.status;
       } catch(e) { results.checkinError = e.message; }
 
-      // Get after balance
       try {
         const resp3 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
         const text3 = await resp3.text();
@@ -194,7 +261,6 @@ async function doCheckin(page, ctx, BASE) {
 
     console.log('agentrouter result:', JSON.stringify(result).substring(0, 800));
 
-    // 提取余额
     let beforeBalance = null;
     let afterBalance = null;
 
@@ -210,7 +276,6 @@ async function doCheckin(page, ctx, BASE) {
     }
     console.log('agentrouter: balance after checkin:', afterBalance);
 
-    // 判断签到成功
     if (result.checkin) {
       if (result.checkin.code === 200 || result.checkin.success === true ||
           (result.checkin.message && result.checkin.message.includes('成功'))) {
@@ -227,7 +292,6 @@ async function doCheckin(page, ctx, BASE) {
       }
     }
 
-    // 如果 API 返回 HTML，检查是否有成功标志
     if (!checkinSuccess) {
       const checkinText = result.checkinText || '';
       const beforeText = result.beforeText || '';
@@ -235,11 +299,7 @@ async function doCheckin(page, ctx, BASE) {
       console.log('agentrouter: checkin text:', checkinText.substring(0, 200));
       console.log('agentrouter: before text:', beforeText.substring(0, 200));
       console.log('agentrouter: after text:', afterText.substring(0, 200));
-
-      if (checkinText.includes('签到成功') || checkinText.includes('success') ||
-          beforeText.includes('签到成功') || afterText.includes('签到成功')) {
-        checkinSuccess = true;
-      }
+      console.log('agentrouter: before status:', result.beforeStatus, 'checkin status:', result.checkinStatus, 'after status:', result.afterStatus);
     }
   } catch(e) { console.log('agentrouter checkin error:', e.message); }
 

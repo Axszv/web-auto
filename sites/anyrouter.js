@@ -20,7 +20,6 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
-  // 先尝试直接访问
   console.log('anyrouter: trying direct access...');
   try {
     const browser = await firefox.launch({ headless: false, args: ['--no-sandbox'] });
@@ -119,6 +118,34 @@ async function runWithProxy(config) {
 async function handleLogin(page, ctx, BASE, browser) {
   let loggedIn = false;
 
+  // 获取页面完整信息
+  const pageInfo = await page.evaluate(() => {
+    const githubBtn = document.querySelector('[aria-label="github_logo"]') ||
+                      document.querySelector('.semi-icon-github_logo');
+    if (!githubBtn) return { found: false };
+
+    // 检查所有父级 a 标签
+    let parent = githubBtn.parentElement;
+    let href = null;
+    while (parent) {
+      if (parent.tagName === 'A' && parent.href && parent.href !== 'about:blank') {
+        href = parent.href;
+        break;
+      }
+      parent = parent.parentElement;
+    }
+
+    return {
+      found: true,
+      href,
+      onclick: githubBtn.getAttribute('onclick'),
+      className: githubBtn.className,
+      tagName: githubBtn.tagName
+    };
+  });
+
+  console.log('anyrouter: page info:', JSON.stringify(pageInfo).substring(0, 300));
+
   // 查找 GitHub 按钮
   let githubBtn = page.locator('[aria-label="github_logo"]');
   if (await githubBtn.count() === 0) githubBtn = page.locator('text=Continue with GitHub');
@@ -129,70 +156,29 @@ async function handleLogin(page, ctx, BASE, browser) {
   if (await githubBtn.count() > 0) {
     console.log('anyrouter: clicking GitHub OAuth button...');
 
-    // 先尝试通过 API 获取 OAuth URL
-    console.log('anyrouter: trying to get OAuth URL via API...');
-    const authUrl = await page.evaluate(async () => {
-      try {
-        // 尝试 /api/auth/github
-        const resp1 = await fetch('/api/auth/github', { method: 'GET', credentials: 'include' });
-        if (resp1.ok) {
-          const data = await resp1.json();
-          if (data.url || data.redirect) return data.url || data.redirect;
-        }
-      } catch(e) {}
-      try {
-        // 尝试 /api/github/login
-        const resp2 = await fetch('/api/github/login', { method: 'GET', credentials: 'include' });
-        if (resp2.ok) {
-          const data = await resp2.json();
-          if (data.url || data.redirect) return data.url || data.redirect;
-        }
-      } catch(e) {}
-      try {
-        // 尝试 /api/authorize/github
-        const resp3 = await fetch('/api/authorize/github', { method: 'GET', credentials: 'include' });
-        if (resp3.ok) {
-          const data = await resp3.json();
-          if (data.url || data.redirect) return data.url || data.redirect;
-        }
-      } catch(e) {}
-      return null;
-    });
-
-    if (authUrl) {
-      console.log('anyrouter: got OAuth URL from API:', authUrl);
-      await page.goto(authUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (pageInfo.href && pageInfo.href.includes('github')) {
+      console.log('anyrouter: navigating to:', pageInfo.href);
+      await page.goto(pageInfo.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await sleep(3000);
-    } else {
-      // 尝试获取按钮的 href
-      const btnHref = await page.evaluate(() => {
+    } else if (pageInfo.onclick) {
+      console.log('anyrouter: executing onclick:', pageInfo.onclick.substring(0, 200));
+      await page.evaluate((onclick) => {
         const btn = document.querySelector('[aria-label="github_logo"]') ||
                     document.querySelector('.semi-icon-github_logo');
-        if (!btn) return null;
-        let a = btn.closest('a');
-        if (a && a.href && a.href !== 'about:blank') return a.href;
-        return null;
-      });
-
-      if (btnHref && btnHref.includes('github')) {
-        console.log('anyrouter: navigating to:', btnHref);
-        await page.goto(btnHref, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        if (btn && btn.onclick) btn.onclick();
+      }, pageInfo.onclick);
+      await sleep(3000);
+    } else {
+      await githubBtn.first().click({ force: true });
+      await sleep(2000);
+      if (!page.url().includes('github.com')) {
+        console.log('anyrouter: click did not navigate, trying JS click...');
+        await page.evaluate(() => {
+          const btn = document.querySelector('[aria-label="github_logo"]') ||
+                      document.querySelector('.semi-icon-github_logo');
+          if (btn) btn.click();
+        });
         await sleep(3000);
-      } else {
-        // 点击按钮
-        await githubBtn.first().click({ force: true });
-        await sleep(2000);
-        if (!page.url().includes('github.com')) {
-          console.log('anyrouter: click did not navigate, trying JS click...');
-          await page.evaluate(() => {
-            const btn = document.querySelector('[aria-label="github_logo"]') ||
-                        document.querySelector('.semi-icon-github_logo');
-            if (btn) {
-              btn.click();
-            }
-          });
-          await sleep(3000);
-        }
       }
     }
 
@@ -219,7 +205,6 @@ async function handleLogin(page, ctx, BASE, browser) {
         if (await authBtn.count() > 0) await authBtn.click({ force: true });
       } catch (e) { console.log('anyrouter: did not reach authorize, URL:', page.url()); }
       await sleep(5000);
-      console.log('anyrouter: final URL:', page.url());
       loggedIn = !page.url().includes('login');
     } else {
       console.log('anyrouter: click did not navigate to GitHub');
@@ -238,11 +223,9 @@ async function handleLogin(page, ctx, BASE, browser) {
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
-    // 通过 page.evaluate + fetch 执行所有 API 调用
     const result = await page.evaluate(async () => {
       const results = {};
 
-      // Get before balance
       try {
         const resp1 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
         const text1 = await resp1.text();
@@ -251,7 +234,6 @@ async function doCheckin(page, ctx, BASE) {
         results.beforeStatus = resp1.status;
       } catch(e) { results.beforeError = e.message; }
 
-      // Checkin
       try {
         const resp2 = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
         const text2 = await resp2.text();
@@ -260,7 +242,6 @@ async function doCheckin(page, ctx, BASE) {
         results.checkinStatus = resp2.status;
       } catch(e) { results.checkinError = e.message; }
 
-      // Get after balance
       try {
         const resp3 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
         const text3 = await resp3.text();
@@ -274,7 +255,6 @@ async function doCheckin(page, ctx, BASE) {
 
     console.log('anyrouter result:', JSON.stringify(result).substring(0, 800));
 
-    // 提取余额
     let beforeBalance = null;
     let afterBalance = null;
 
@@ -290,7 +270,6 @@ async function doCheckin(page, ctx, BASE) {
     }
     console.log('anyrouter: balance after checkin:', afterBalance);
 
-    // 判断签到成功
     if (result.checkin) {
       if (result.checkin.code === 200 || result.checkin.success === true ||
           (result.checkin.message && result.checkin.message.includes('成功'))) {
@@ -307,19 +286,11 @@ async function doCheckin(page, ctx, BASE) {
       }
     }
 
-    // 如果 API 返回 HTML，检查是否有成功标志
     if (!checkinSuccess) {
-      const checkinText = result.checkinText || '';
-      const beforeText = result.beforeText || '';
-      const afterText = result.afterText || '';
-      console.log('anyrouter: checkin text:', checkinText.substring(0, 200));
-      console.log('anyrouter: before text:', beforeText.substring(0, 200));
-      console.log('anyrouter: after text:', afterText.substring(0, 200));
-
-      if (checkinText.includes('签到成功') || checkinText.includes('success') ||
-          beforeText.includes('签到成功') || afterText.includes('签到成功')) {
-        checkinSuccess = true;
-      }
+      console.log('anyrouter: checkin text:', (result.checkinText || '').substring(0, 200));
+      console.log('anyrouter: before text:', (result.beforeText || '').substring(0, 200));
+      console.log('anyrouter: after text:', (result.afterText || '').substring(0, 200));
+      console.log('anyrouter: before status:', result.beforeStatus, 'checkin status:', result.checkinStatus, 'after status:', result.afterStatus);
     }
   } catch(e) { console.log('anyrouter checkin error:', e.message); }
 
