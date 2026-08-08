@@ -1,28 +1,7 @@
 {
   "sites": [
-    {
-      "name": "gogocs",
-      "url": "https://gogocs.xyz",
-      "enabled": true,
-      "config": {}
-    },
-    {
-      "name": "sharedchat",
-      "url": "https://new.sharedchat.cc",
-      "enabled": true,
-      "config": {}
-    },
-    {
-      "name": "agentrouter",
-      "url": "https://agentrouter.org",
-      "enabled": true,
-      "config": {}
-    },
-    {
-      "name": "anyrouter",
-      "url": "https://anyrouter.top",
-      "enabled": true,
-      "config": {}
-    }
+    { "name": "gogocs", "url": "https://gogocs.xyz", "enabled": true, "config": {} },
+    { "name": "agentrouter", "url": "https://agentrouter.org", "enabled": true, "config": {} },
+    { "name": "anyrouter", "url": "https://anyrouter.top", "enabled": true, "config": {} }
   ]
 }

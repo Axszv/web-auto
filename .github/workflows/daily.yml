@@ -2,7 +2,7 @@ name: Daily Web Auto
 
 on:
   schedule:
-    - cron: '17 19 * * *'
+    - cron: '17 20 * * *'
   workflow_dispatch:
 
 permissions:
