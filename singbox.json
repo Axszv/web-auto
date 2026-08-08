@@ -1,0 +1,37 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "http",
+      "tag": "http-in",
+      "listen": "127.0.0.1",
+      "listen_port": 1080
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "vless-out",
+      "server": "proxyip.jp.cmliussss.net",
+      "server_port": 443,
+      "uuid": "4f9a17f1-c23f-4791-8a10-86cf77d274a8",
+      "tls": {
+        "enabled": true,
+        "server_name": "epic-gcp-relay.lkjh05.workers.dev"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/?ed=2560"
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "final": "vless-out"
+  }
+}

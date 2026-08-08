@@ -1,4 +1,4 @@
-// sites/anyrouter.js — 使用HTTP代理绕过Cloudflare
+// sites/anyrouter.js — 使用 sing-box VLESS 代理绕过 Cloudflare
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +20,8 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
-  const PROXY = { server: 'http://proxy.oxylabs.io:55000', username: 'lkjh5_4gW1v', password: 'Lz1979474206_' };
+  // 使用 sing-box 本地 HTTP 代理 (port 1080)
+  const PROXY = { server: 'http://127.0.0.1:1080' };
 
   const browser = await firefox.launch({
     headless: false,
@@ -48,7 +49,7 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('anyrouter: starting via proxy...');
+    console.log('anyrouter: starting via sing-box proxy...');
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
     console.log('anyrouter after main:', page.url());
