@@ -20,7 +20,6 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
 
-  // 使用 sing-box 本地 HTTP 代理 (port 1080)
   const PROXY = { server: 'http://127.0.0.1:1080' };
 
   const browser = await firefox.launch({
@@ -51,29 +50,45 @@ async function run(config = {}) {
 
   try {
     console.log('agentrouter: navigating via sing-box proxy...');
-    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // 先访问主页，可能 OAuth 按钮在主页
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
-    console.log('agentrouter URL:', page.url());
+    console.log('agentrouter main page URL:', page.url());
 
-    const pageText = await page.evaluate(() => document.body.innerText);
-    console.log('agentrouter page text:', pageText.substring(0, 300));
+    // 检查主页是否有 GitHub 按钮
+    let hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
+    console.log('agentrouter main page has GitHub button:', hasGitHubBtn);
 
-    if (pageText.includes('Access Verification') || pageText.includes('verification')) {
-      console.log('agentrouter: still blocked by verification');
+    if (!hasGitHubBtn) {
+      // 尝试点击 Sign in 或 Log in 按钮
+      console.log('agentrouter: trying to find Sign in button...');
+      const signInBtn = page.locator('text=Sign in, text=Log In').first();
+      if (await signInBtn.count() > 0) {
+        console.log('agentrouter: clicking Sign in...');
+        await signInBtn.click();
+        await sleep(3000);
+        hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
+        console.log('agentrouter after Sign in click, has GitHub button:', hasGitHubBtn);
+      }
     }
 
-    // 检查是否有 GitHub OAuth 按钮
-    const hasGitHubBtn = await page.evaluate(() => {
-      const svg = document.querySelector('[aria-label="github_logo"]');
-      return !!svg;
-    });
-    console.log('agentrouter: has GitHub button:', hasGitHubBtn);
+    if (!hasGitHubBtn) {
+      // 尝试访问 /login 页面
+      console.log('agentrouter: navigating to /login...');
+      await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(3000);
+      hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
+      console.log('agentrouter /login page has GitHub button:', hasGitHubBtn);
+    }
+
+    console.log('agentrouter URL:', page.url());
+    const pageText = await page.evaluate(() => document.body.innerText);
+    console.log('agentrouter page text:', pageText.substring(0, 300));
 
     let loggedIn = false;
 
     if (hasGitHubBtn) {
       console.log('agentrouter: clicking GitHub OAuth button...');
-      // 使用 page.click 而不是 evaluate 来确保点击事件正确触发
       await page.locator('[aria-label="github_logo"]').first().click();
       await sleep(3000);
       console.log('agentrouter after click, URL:', page.url());
@@ -108,7 +123,6 @@ async function run(config = {}) {
       loggedIn = !page.url().includes('login');
     } else {
       console.log('agentrouter: no GitHub button found, checking if already logged in...');
-      // 尝试直接使用现有 cookies 访问控制台
       await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
       await sleep(3000);
       loggedIn = !page.url().includes('login');
@@ -122,7 +136,7 @@ async function run(config = {}) {
         const cookies = await ctx.cookies(BASE);
         const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
 
-        // 先获取签到前余额
+        // 获取签到前余额
         let beforeBalance = null;
         try {
           const infoResp = await page.request.get(BASE + '/api/user/info', {
@@ -133,7 +147,9 @@ async function run(config = {}) {
             beforeBalance = info.data?.balance || info.data?.credits || info.balance || info.credits;
             console.log('agentrouter: balance before checkin:', beforeBalance);
           }
-        } catch(e) {}
+        } catch(e) {
+          console.log('agentrouter: failed to get before balance');
+        }
 
         // 签到
         const resp = await page.request.post(BASE + '/api/user/checkin', {
@@ -158,9 +174,11 @@ async function run(config = {}) {
             afterBalance = info2.data?.balance || info2.data?.credits || info2.balance || info2.credits;
             console.log('agentrouter: balance after checkin:', afterBalance);
           }
-        } catch(e) {}
+        } catch(e) {
+          console.log('agentrouter: failed to get after balance');
+        }
 
-        // 判断签到是否成功：余额增加或返回成功状态
+        // 判断签到是否成功
         if (checkinResult) {
           if (checkinResult.code === 200 || checkinResult.success === true) {
             checkinSuccess = true;
