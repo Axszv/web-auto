@@ -6,17 +6,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo "=== Testing proxyip domains ==="
-          curl -s --max-time 10 -o /dev/null -w "proxyip.us: %{http_code}\n" https://proxyip.us.cmliussss.net/ || echo "proxyip.us: failed"
-          curl -s --max-time 10 -o /dev/null -w "proxyip.jp: %{http_code}\n" https://proxyip.jp.cmliussss.net/ || echo "proxyip.jp: failed"
-          curl -s --max-time 10 -o /dev/null -w "proxyip.sg: %{http_code}\n" https://proxyip.sg.cmliussss.net/ || echo "proxyip.sg: failed"
-          curl -s --max-time 10 -o /dev/null -w "proxyip.hk: %{http_code}\n" https://proxyip.hk.cmliussss.net/ || echo "proxyip.hk: failed"
-          curl -s --max-time 10 -o /dev/null -w "proxyip.root: %{http_code}\n" https://proxyip.cmliussss.net/ || echo "proxyip.root: failed"
-          echo "=== Testing workers.dev ==="
-          curl -s --max-time 10 -o /dev/null -w "epic-gcp-relay: %{http_code}\n" https://epic-gcp-relay.lkjh05.workers.dev/ || echo "workers: failed"
-          echo "=== Testing direct IP ==="
-          curl -s --max-time 10 -o /dev/null -w "104.18.39.209: %{http_code}\n" https://104.18.39.209/ -k --resolve new.axs.dpdns.org:443:104.18.39.209 || echo "direct: failed"
-          echo "=== Testing sni.111000.indevs.in ==="
-          curl -s --max-time 10 -o /dev/null -w "sni.indevs: %{http_code}\n" https://sni.111000.indevs.in/ || echo "indevs: failed"
-          echo "=== Testing blog API ==="
-          curl -s --max-time 10 "https://ipdb.api.030101.xyz/?type=bestproxy&country=true" | head -3 || echo "api: failed"
+          echo "=== Test 1: Direct IP to workers.dev ==="
+          for ip in 104.18.39.209 172.67.185.40 104.16.132.229 172.64.155.175; do
+            code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "https://epic-gcp-relay.lkjh05.workers.dev/" --resolve "epic-gcp-relay.lkjh05.workers.dev:443:$ip" 2>/dev/null)
+            echo "$ip: $code"
+          done
+          echo "=== Test 2: GCP IPs from blog API ==="
+          for ip in 8.212.12.98 155.248.170.249 8.219.243.132 47.254.86.133 141.147.147.28; do
+            code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "https://epic-gcp-relay.lkjh05.workers.dev/" --resolve "epic-gcp-relay.lkjh05.workers.dev:443:$ip" 2>/dev/null)
+            echo "$ip: $code"
+          done
+          echo "=== Test 3: Test VLESS connectivity via workers ==="
+          curl -s --max-time 10 -v "https://epic-gcp-relay.lkjh05.workers.dev/" 2>&1 | grep -iE 'HTTP|location|server' | head -10
