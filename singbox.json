@@ -14,7 +14,7 @@
     {
       "type": "vless",
       "tag": "vless-out",
-      "server": "{{PROXY_SERVER}}",
+      "server": "REDACTED-HOST",
       "server_port": 443,
       "uuid": "REDACTED",
       "tls": {
