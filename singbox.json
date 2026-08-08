@@ -14,7 +14,7 @@
     {
       "type": "vless",
       "tag": "vless-out",
-      "server": "proxyip.jp.cmliussss.net",
+      "server": "proxyip.us.cmliussss.net",
       "server_port": 443,
       "uuid": "4f9a17f1-c23f-4791-8a10-86cf77d274a8",
       "tls": {

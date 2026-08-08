@@ -6,14 +6,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo "=== Test proxyip domains ==="
-          curl -s --max-time 10 -o /dev/null -w "proxyip.us: %{http_code}\n" https://proxyip.us.cmliussss.net/ || echo "proxyip.us: failed"
-          curl -s --max-time 10 -o /dev/null -w "proxyip.jp: %{http_code}\n" https://proxyip.jp.cmliussss.net/ || echo "proxyip.jp: failed"
-          curl -s --max-time 10 -o /dev/null -w "proxyip.sg: %{http_code}\n" https://proxyip.sg.cmliussss.net/ || echo "proxyip.sg: failed"
-          curl -s --max-time 10 -o /dev/null -w "proxyip.hk: %{http_code}\n" https://proxyip.hk.cmliussss.net/ || echo "proxyip.hk: failed"
-          echo "=== Test workers.dev ==="
-          curl -s --max-time 10 -o /dev/null -w "workers: %{http_code}\n" https://epic-gcp-relay.lkjh05.workers.dev/ || echo "workers: failed"
-          echo "=== Test indevs ==="
-          curl -s --max-time 10 -o /dev/null -w "indevs: %{http_code}\n" https://sni.111000.indevs.in/ || echo "indevs: failed"
-          echo "=== Test direct IP ==="
-          curl -s --max-time 10 -o /dev/null -w "direct: %{http_code}\n" https://104.18.39.209/ -k --resolve new.axs.dpdns.org:443:104.18.39.209 || echo "direct: failed"
+          echo "=== Test sing-box with proxyip.us ==="
+          SINGBOX_VER="1.13.16"
+          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz" -o /tmp/sing-box.tar.gz
+          mkdir -p /tmp/sing-box
+          tar -xzf /tmp/sing-box.tar.gz -C /tmp/sing-box --strip-components=1
+
+          echo "Starting sing-box..."
+          /tmp/sing-box/sing-box run -c singbox.json > /tmp/sing-box.log 2>&1 &
+          echo $! > /tmp/singbox.pid
+          sleep 3
+
+          if kill -0 $(cat /tmp/singbox.pid) 2>/dev/null; then
+            echo "sing-box started OK"
+            curl -s --max-time 10 -o /dev/null -w "agentrouter via proxy: %{http_code}\n" https://agentrouter.org/
+            curl -s --max-time 10 -o /dev/null -w "anyrouter via proxy: %{http_code}\n" https://anyrouter.top/
+          else
+            echo "sing-box failed to start:"
+            cat /tmp/sing-box.log | tail -20
+          fi
+
+          kill $(cat /tmp/singbox.pid) 2>/dev/null || true
