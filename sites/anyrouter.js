@@ -51,40 +51,50 @@ async function run(config = {}) {
   try {
     console.log('anyrouter: starting via sing-box proxy...');
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await sleep(5000);
+    await sleep(8000);
     console.log('anyrouter after main:', page.url());
 
     let checkinSuccess = false;
     let loggedIn = false;
 
-    // 检查当前 URL，如果在登录页则处理登录
-    let currentUrl = page.url();
-    console.log('anyrouter current URL:', currentUrl);
+    // 先检查主页是否有登录/注册按钮
+    const pageText = await page.evaluate(() => document.body.innerText);
+    console.log('anyrouter main page text:', pageText.substring(0, 300));
 
-    if (currentUrl.includes('login') || currentUrl.includes('oauth')) {
-      console.log('anyrouter: on login page');
-      await sleep(3000);
+    // 直接访问 login 页面获取 OAuth 按钮
+    console.log('anyrouter: navigating to /login...');
+    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await sleep(5000);
+    console.log('anyrouter login page URL:', page.url());
 
-      // 检查是否有 GitHub OAuth 按钮
-      const hasGitHubBtn = await page.evaluate(() => {
-        const svg = document.querySelector('[aria-label="github_logo"]');
-        return !!svg;
-      });
-      console.log('anyrouter: has GitHub button:', hasGitHubBtn);
+    // 查找 GitHub 按钮
+    let githubBtn = null;
+    githubBtn = page.locator('[aria-label="github_logo"]');
+    if (await githubBtn.count() === 0) {
+      githubBtn = page.locator('text=Continue with GitHub');
+    }
+    if (await githubBtn.count() === 0) {
+      githubBtn = page.locator('svg:has-text("github")');
+    }
 
-      if (hasGitHubBtn) {
-        console.log('anyrouter: clicking GitHub OAuth button...');
-        await page.locator('[aria-label="github_logo"]').first().click();
-        await sleep(3000);
-        console.log('anyrouter after click, URL:', page.url());
+    console.log('anyrouter: found GitHub button:', await githubBtn.count());
 
-        if (page.url().includes('github.com/login') && GH_USER && GH_PASS) {
+    if (await githubBtn.count() > 0) {
+      console.log('anyrouter: clicking GitHub OAuth button...');
+      await githubBtn.first().click();
+      await sleep(5000);
+      console.log('anyrouter after click, URL:', page.url());
+
+      if (page.url().includes('github.com')) {
+        console.log('anyrouter: on GitHub page');
+
+        if (page.url().includes('/login')) {
           console.log('anyrouter: on GitHub login page');
           await page.locator('input[name="login"]').first().fill(GH_USER);
           await page.locator('input[name="password"]').first().fill(GH_PASS);
           await page.locator('input[type="submit"]').first().click();
           await sleep(2000);
-          if (page.url().includes('github.com/login')) {
+          if (page.url().includes('/login')) {
             console.log('anyrouter: 2FA required');
             await browser.close();
             return { success: false, error: '2fa_required' };
@@ -107,21 +117,13 @@ async function run(config = {}) {
         console.log('anyrouter: final URL:', page.url());
         loggedIn = !page.url().includes('login');
       }
-    }
-
-    // 如果已登录或不需要登录，访问控制台
-    if (loggedIn || !currentUrl.includes('login')) {
-      console.log('anyrouter: navigating to console...');
-      try {
-        await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await sleep(3000);
-        console.log('anyrouter console URL:', page.url());
-      } catch (e) {
-        console.log('anyrouter: console navigation error:', e.message);
-      }
-
-      // 检查是否在控制台页面（已登录）
+    } else {
+      console.log('anyrouter: no GitHub button found');
+      // 尝试直接访问控制台
+      await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await sleep(5000);
       loggedIn = !page.url().includes('login');
+      console.log('anyrouter: logged in status:', loggedIn, 'URL:', page.url());
     }
 
     if (loggedIn) {
@@ -184,7 +186,7 @@ async function run(config = {}) {
         console.log('anyrouter checkin error:', e.message);
       }
     } else {
-      console.log('anyrouter: still on login page or not logged in');
+      console.log('anyrouter: still on login page');
     }
 
     const cookies = await ctx.cookies(BASE);

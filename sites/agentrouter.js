@@ -50,79 +50,81 @@ async function run(config = {}) {
 
   try {
     console.log('agentrouter: navigating via sing-box proxy...');
-    // 先访问主页，可能 OAuth 按钮在主页
-    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
-    console.log('agentrouter main page URL:', page.url());
-
-    // 检查主页是否有 GitHub 按钮
-    let hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
-    console.log('agentrouter main page has GitHub button:', hasGitHubBtn);
-
-    if (!hasGitHubBtn) {
-      // 尝试点击 Sign in 或 Log in 按钮
-      console.log('agentrouter: trying to find Sign in button...');
-      const signInBtn = page.locator('text=Sign in, text=Log In').first();
-      if (await signInBtn.count() > 0) {
-        console.log('agentrouter: clicking Sign in...');
-        await signInBtn.click();
-        await sleep(3000);
-        hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
-        console.log('agentrouter after Sign in click, has GitHub button:', hasGitHubBtn);
-      }
-    }
-
-    if (!hasGitHubBtn) {
-      // 尝试访问 /login 页面
-      console.log('agentrouter: navigating to /login...');
-      await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(3000);
-      hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
-      console.log('agentrouter /login page has GitHub button:', hasGitHubBtn);
-    }
-
     console.log('agentrouter URL:', page.url());
+
     const pageText = await page.evaluate(() => document.body.innerText);
-    console.log('agentrouter page text:', pageText.substring(0, 300));
+    console.log('agentrouter page text:', pageText.substring(0, 400));
 
     let loggedIn = false;
 
-    if (hasGitHubBtn) {
+    // 尝试多种方式查找 GitHub 按钮
+    let githubBtn = null;
+
+    // 方式1: 通过 aria-label
+    githubBtn = page.locator('[aria-label="github_logo"]');
+    if (await githubBtn.count() === 0) {
+      // 方式2: 通过文本 "Continue with GitHub"
+      githubBtn = page.locator('text=Continue with GitHub');
+      if (await githubBtn.count() === 0) {
+        // 方式3: 通过 SVG 包含 github 字样
+        githubBtn = page.locator('svg:has-text("github")');
+        if (await githubBtn.count() === 0) {
+          // 方式4: 通过类名
+          githubBtn = page.locator('.github-logo, [class*="github"]');
+        }
+      }
+    }
+
+    console.log('agentrouter: found GitHub button:', await githubBtn.count());
+
+    if (await githubBtn.count() > 0) {
       console.log('agentrouter: clicking GitHub OAuth button...');
-      await page.locator('[aria-label="github_logo"]').first().click();
-      await sleep(3000);
+      await githubBtn.first().click();
+      await sleep(5000);
       console.log('agentrouter after click, URL:', page.url());
 
-      if (page.url().includes('github.com/login') && GH_USER && GH_PASS) {
-        console.log('agentrouter: on GitHub login page');
-        await page.locator('input[name="login"]').first().fill(GH_USER);
-        await page.locator('input[name="password"]').first().fill(GH_PASS);
-        await page.locator('input[type="submit"]').first().click();
-        await sleep(2000);
-        if (page.url().includes('github.com/login')) {
-          console.log('agentrouter: 2FA required');
-          await browser.close();
-          return { success: false, error: '2fa_required' };
-        }
-      }
+      // 检查是否跳转到 GitHub
+      if (page.url().includes('github.com')) {
+        console.log('agentrouter: on GitHub page');
 
-      try {
-        await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-        console.log('agentrouter: on authorize page');
-        const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-        if (await authBtn.count() > 0) {
-          await authBtn.click({ force: true });
-          console.log('agentrouter: clicked Authorize');
+        // 如果是登录页，填写凭据
+        if (page.url().includes('/login')) {
+          console.log('agentrouter: on GitHub login page');
+          await page.locator('input[name="login"]').first().fill(GH_USER);
+          await page.locator('input[name="password"]').first().fill(GH_PASS);
+          await page.locator('input[type="submit"]').first().click();
+          await sleep(2000);
+          if (page.url().includes('/login')) {
+            console.log('agentrouter: 2FA required');
+            await browser.close();
+            return { success: false, error: '2fa_required' };
+          }
         }
-      } catch (e) {
-        console.log('agentrouter: did not reach authorize, URL:', page.url());
-      }
 
-      await sleep(5000);
-      console.log('agentrouter: final URL:', page.url());
-      loggedIn = !page.url().includes('login');
+        // 等待授权页面
+        try {
+          await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+          console.log('agentrouter: on authorize page');
+          const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+          if (await authBtn.count() > 0) {
+            await authBtn.click({ force: true });
+            console.log('agentrouter: clicked Authorize');
+          }
+        } catch (e) {
+          console.log('agentrouter: did not reach authorize, URL:', page.url());
+        }
+
+        await sleep(5000);
+        console.log('agentrouter: final URL:', page.url());
+        loggedIn = !page.url().includes('login');
+      } else {
+        console.log('agentrouter: click did not navigate to GitHub, URL:', page.url());
+      }
     } else {
       console.log('agentrouter: no GitHub button found, checking if already logged in...');
+      // 尝试直接访问控制台
       await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
       await sleep(3000);
       loggedIn = !page.url().includes('login');
