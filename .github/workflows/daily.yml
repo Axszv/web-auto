@@ -31,55 +31,11 @@ jobs:
       - name: Install system deps for Firefox
         run: npx playwright install-deps firefox
 
-      - name: Download sing-box
-        run: |
-          SINGBOX_VER="1.13.16"
-          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz" -o /tmp/sing-box.tar.gz
-          mkdir -p /tmp/sing-box
-          tar -xzf /tmp/sing-box.tar.gz -C /tmp/sing-box --strip-components=1
-
       - name: Setup virtual display
         run: |
           sudo apt-get install -y xvfb
           Xvfb :99 -screen 0 1280x800x24 &
           echo "DISPLAY=:99" >> $GITHUB_ENV
-
-      - name: Start sing-box proxy with proxy IP
-        run: |
-          # 尝试获取可用代理 IP
-          PROXY_IP=""
-          for i in 1 2 3; do
-            echo "Attempt $i to get proxy IP..."
-            PROXY_IP=$(curl -s --max-time 10 "https://ipdb.api.030101.xyz/?type=bestproxy&country=true" | head -1 | cut -d'#' -f1)
-            if [ -n "$PROXY_IP" ]; then
-              echo "Got proxy IP: $PROXY_IP"
-              break
-            fi
-            sleep 2
-          done
-
-          if [ -z "$PROXY_IP" ]; then
-            echo "Failed to get proxy IP, using default"
-            PROXY_IP="proxyip.jp.cmliussss.net"
-          fi
-
-          # 更新 singbox.json 中的代理服务器
-          sed -i "s/{{PROXY_SERVER}}/$PROXY_IP/g" singbox.json
-          cat singbox.json
-
-          # 启动 sing-box
-          /tmp/sing-box/sing-box run -c singbox.json > /tmp/sing-box.log 2>&1 &
-          echo $! > /tmp/singbox.pid
-          sleep 3
-
-          if kill -0 $(cat /tmp/singbox.pid) 2>/dev/null; then
-            echo "sing-box started successfully"
-            curl -s --max-time 5 http://127.0.0.1:1080/ -o /dev/null && echo "proxy port 1080 OK"
-          else
-            echo "sing-box failed to start:"
-            cat /tmp/sing-box.log
-            exit 1
-          fi
 
       - name: Run automation
         run: node auto.js
@@ -87,12 +43,6 @@ jobs:
           DISPLAY: :99
           GH_USER: ${{ secrets.GH_USER }}
           GH_PASS: ${{ secrets.GH_PASS }}
-
-      - name: Kill sing-box
-        if: always()
-        run: |
-          kill $(cat /tmp/singbox.pid) 2>/dev/null || true
-          cat /tmp/sing-box.log 2>/dev/null | tail -20 || true
 
       - name: Commit and push updated cookies
         run: |

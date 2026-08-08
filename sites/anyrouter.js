@@ -20,7 +20,76 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
-  // 使用 sing-box 本地 HTTP 代理 (port 1080)
+  // 先尝试直接访问（无需代理）
+  console.log('anyrouter: trying direct access...');
+  try {
+    const browser = await firefox.launch({
+      headless: false,
+      args: ['--no-sandbox']
+    });
+
+    const ctx = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 800 },
+      locale: 'en-US'
+    });
+
+    await ctx.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    });
+
+    console.log('anyrouter: clearing old cookies...');
+    await ctx.clearCookies();
+
+    const page = await ctx.newPage();
+    page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
+    page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
+
+    try {
+      await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await sleep(8000);
+      console.log('anyrouter after main:', page.url());
+
+      let loggedIn = false;
+      let checkinSuccess = false;
+
+      // 直接访问 login 页面
+      console.log('anyrouter: navigating to /login...');
+      await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await sleep(5000);
+      console.log('anyrouter login page URL:', page.url());
+
+      loggedIn = await handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser);
+      checkinSuccess = loggedIn ? await doCheckin(page, ctx, BASE, browser) : false;
+
+      const cookies = await ctx.cookies(BASE);
+      if (cookies.length > 0) {
+        const all = await loadCookies();
+        all.anyrouter = cookies;
+        await saveCookies(all);
+        console.log('anyrouter cookies saved:', cookies.length);
+      }
+
+      await browser.close();
+      console.log('anyrouter done, checkinSuccess:', checkinSuccess);
+      return { success: true, checkinSuccess };
+    } catch (e) {
+      console.log('anyrouter: direct access failed:', e.message);
+      await browser.close();
+      throw e;
+    }
+  } catch (e) {
+    console.log('anyrouter: direct failed, trying proxy...');
+    return await runWithProxy(config);
+  }
+}
+
+async function runWithProxy(config) {
+  const GH_USER = config.GH_USER || process.env.GH_USER || '';
+  const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
+  const BASE = 'https://anyrouter.top';
   const PROXY = { server: 'http://127.0.0.1:1080' };
 
   const browser = await firefox.launch({
@@ -41,7 +110,7 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  console.log('anyrouter: clearing old cookies...');
+  console.log('anyrouter (proxy): clearing old cookies...');
   await ctx.clearCookies();
 
   const page = await ctx.newPage();
@@ -49,233 +118,156 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('anyrouter: starting via proxy...');
+    console.log('anyrouter (proxy): starting via proxy...');
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(8000);
-    console.log('anyrouter after main:', page.url());
+    console.log('anyrouter (proxy) after main:', page.url());
 
-    let checkinSuccess = false;
     let loggedIn = false;
+    let checkinSuccess = false;
 
-    // 直接访问 login 页面
-    console.log('anyrouter: navigating to /login...');
+    console.log('anyrouter (proxy): navigating to /login...');
     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
-    console.log('anyrouter login page URL:', page.url());
+    console.log('anyrouter (proxy) login page URL:', page.url());
 
-    // 查找 GitHub 按钮
-    let githubBtn = page.locator('[aria-label="github_logo"]');
-    if (await githubBtn.count() === 0) {
-      githubBtn = page.locator('text=Continue with GitHub');
-    }
-    if (await githubBtn.count() === 0) {
-      githubBtn = page.locator('.semi-icon-github_logo');
-    }
-
-    console.log('anyrouter: found GitHub button:', await githubBtn.count());
-
-    if (await githubBtn.count() > 0) {
-      console.log('anyrouter: clicking GitHub OAuth button...');
-
-      // 尝试获取按钮的 href 属性
-      const btnHref = await page.evaluate(() => {
-        const btn = document.querySelector('[aria-label="github_logo"]') ||
-                    document.querySelector('.semi-icon-github_logo');
-        if (!btn) return null;
-        let a = btn.closest('a');
-        if (a && a.href && a.href !== 'about:blank') return a.href;
-        // 检查 onclick
-        const onclick = btn.getAttribute('onclick');
-        if (onclick && onclick.includes('github')) return 'onclick-github';
-        return null;
-      });
-
-      console.log('anyrouter: button href:', btnHref);
-
-      if (btnHref && !btnHref.includes('github')) {
-        // 直接导航到 href
-        console.log('anyrouter: navigating to:', btnHref);
-        await page.goto(btnHref, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await sleep(3000);
-      } else {
-        // 点击按钮
-        await githubBtn.first().click({ force: true });
-        await sleep(2000);
-
-        // 检查是否有新标签页或导航
-        if (!page.url().includes('github.com')) {
-          // 尝试用 JavaScript 点击
-          console.log('anyrouter: click did not navigate, trying JS click...');
-          await page.evaluate(() => {
-            const btn = document.querySelector('[aria-label="github_logo"]') ||
-                        document.querySelector('.semi-icon-github_logo');
-            if (btn) {
-              const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-              btn.dispatchEvent(clickEvent);
-            }
-          });
-          await sleep(3000);
-        }
-      }
-
-      console.log('anyrouter after click, URL:', page.url());
-
-      if (page.url().includes('github.com')) {
-        console.log('anyrouter: on GitHub page');
-
-        if (page.url().includes('/login')) {
-          console.log('anyrouter: on GitHub login page');
-          await page.locator('input[name="login"]').first().fill(GH_USER);
-          await page.locator('input[name="password"]').first().fill(GH_PASS);
-          await page.locator('input[type="submit"]').first().click();
-          await sleep(2000);
-          if (page.url().includes('/login')) {
-            console.log('anyrouter: 2FA required');
-            await browser.close();
-            return { success: false, error: '2fa_required' };
-          }
-        }
-
-        try {
-          await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-          console.log('anyrouter: on authorize page');
-          const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-          if (await authBtn.count() > 0) {
-            await authBtn.click({ force: true });
-            console.log('anyrouter: clicked Authorize');
-          }
-        } catch (e) {
-          console.log('anyrouter: did not reach authorize, URL:', page.url());
-        }
-
-        await sleep(5000);
-        console.log('anyrouter: final URL:', page.url());
-        loggedIn = !page.url().includes('login');
-      } else {
-        console.log('anyrouter: click did not navigate to GitHub');
-        // 尝试直接访问 GitHub OAuth
-        console.log('anyrouter: trying direct GitHub OAuth...');
-        try {
-          await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
-          await sleep(3000);
-          const authUrl = await page.evaluate(async () => {
-            try {
-              const resp = await fetch('/api/auth/github', { method: 'GET', credentials: 'include' });
-              if (resp.ok) {
-                const data = await resp.json();
-                return data?.url || data?.redirect || null;
-              }
-            } catch(e) {}
-            return null;
-          });
-          if (authUrl) {
-            console.log('anyrouter: got auth URL:', authUrl);
-            await page.goto(authUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-            await sleep(3000);
-            if (page.url().includes('github.com')) {
-              // GitHub login flow...
-              console.log('anyrouter: on GitHub page via API');
-              if (page.url().includes('/login')) {
-                await page.locator('input[name="login"]').first().fill(GH_USER);
-                await page.locator('input[name="password"]').first().fill(GH_PASS);
-                await page.locator('input[type="submit"]').first().click();
-                await sleep(2000);
-                if (!page.url().includes('/login')) {
-                  try {
-                    await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-                    const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-                    if (await authBtn.count() > 0) {
-                      await authBtn.click({ force: true });
-                    }
-                  } catch(e) {}
-                }
-              }
-              await sleep(5000);
-              console.log('anyrouter: final URL (API):', page.url());
-              loggedIn = !page.url().includes('login');
-            }
-          }
-        } catch(e) {
-          console.log('anyrouter: direct auth failed:', e.message);
-        }
-      }
-    } else {
-      console.log('anyrouter: no GitHub button found');
-      await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await sleep(5000);
-      loggedIn = !page.url().includes('login');
-      console.log('anyrouter: logged in status:', loggedIn);
-    }
-
-    if (loggedIn) {
-      console.log('anyrouter: logged in!');
-      try {
-        const cookies = await ctx.cookies(BASE);
-        const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
-
-        let beforeBalance = null;
-        try {
-          const infoResp = await page.request.get(BASE + '/api/user/info', {
-            headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
-          });
-          if (infoResp.ok()) {
-            const info = await infoResp.json();
-            beforeBalance = info.data?.balance || info.data?.credits || info.balance || info.credits;
-            console.log('anyrouter: balance before checkin:', beforeBalance);
-          }
-        } catch(e) { console.log('anyrouter: failed to get before balance'); }
-
-        const cr = await page.evaluate(async () => {
-          try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
-          catch(e) { return { error: e.message }; }
-        });
-        console.log('anyrouter checkin:', JSON.stringify(cr));
-
-        let afterBalance = null;
-        try {
-          const infoResp2 = await page.request.get(BASE + '/api/user/info', {
-            headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
-          });
-          if (infoResp2.ok()) {
-            const info2 = await infoResp2.json();
-            afterBalance = info2.data?.balance || info2.data?.credits || info2.balance || info2.credits;
-            console.log('anyrouter: balance after checkin:', afterBalance);
-          }
-        } catch(e) { console.log('anyrouter: failed to get after balance'); }
-
-        if (cr && (cr.code === 200 || cr.success === true || cr.message?.includes('成功'))) {
-          checkinSuccess = true;
-          console.log('anyrouter: checkin successful (API returned success)');
-        }
-        if (beforeBalance !== null && afterBalance !== null) {
-          const diff = afterBalance - beforeBalance;
-          console.log('anyrouter: balance change:', diff);
-          if (diff >= 25) {
-            checkinSuccess = true;
-            console.log('anyrouter: balance increased by', diff, '-> checkin successful!');
-          }
-        }
-      } catch(e) { console.log('anyrouter checkin error:', e.message); }
-    } else {
-      console.log('anyrouter: still on login page');
-    }
+    loggedIn = await handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser);
+    checkinSuccess = loggedIn ? await doCheckin(page, ctx, BASE, browser) : false;
 
     const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
       const all = await loadCookies();
       all.anyrouter = cookies;
       await saveCookies(all);
-      console.log('anyrouter cookies saved:', cookies.length);
+      console.log('anyrouter (proxy) cookies saved:', cookies.length);
     }
 
     await browser.close();
-    console.log('anyrouter done, checkinSuccess:', checkinSuccess);
+    console.log('anyrouter (proxy) done, checkinSuccess:', checkinSuccess);
     return { success: true, checkinSuccess };
   } catch (e) {
-    console.error('anyrouter error:', e.message);
+    console.error('anyrouter (proxy) error:', e.message);
     await browser.close();
     return { success: false, error: e.message };
   }
+}
+
+async function handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser) {
+  let loggedIn = false;
+
+  // 查找 GitHub 按钮
+  let githubBtn = page.locator('[aria-label="github_logo"]');
+  if (await githubBtn.count() === 0) {
+    githubBtn = page.locator('text=Continue with GitHub');
+  }
+  if (await githubBtn.count() === 0) {
+    githubBtn = page.locator('.semi-icon-github_logo');
+  }
+
+  console.log('anyrouter: found GitHub button:', await githubBtn.count());
+
+  if (await githubBtn.count() > 0) {
+    console.log('anyrouter: clicking GitHub OAuth button...');
+    await githubBtn.first().click({ force: true });
+    await sleep(5000);
+    console.log('anyrouter after click, URL:', page.url());
+
+    if (page.url().includes('github.com')) {
+      console.log('anyrouter: on GitHub page');
+
+      if (page.url().includes('/login')) {
+        console.log('anyrouter: on GitHub login page');
+        await page.locator('input[name="login"]').first().fill(GH_USER);
+        await page.locator('input[name="password"]').first().fill(GH_PASS);
+        await page.locator('input[type="submit"]').first().click();
+        await sleep(2000);
+        if (page.url().includes('/login')) {
+          console.log('anyrouter: 2FA required');
+          await browser.close();
+          return false;
+        }
+      }
+
+      try {
+        await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+        console.log('anyrouter: on authorize page');
+        const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+        if (await authBtn.count() > 0) {
+          await authBtn.click({ force: true });
+          console.log('anyrouter: clicked Authorize');
+        }
+      } catch (e) {
+        console.log('anyrouter: did not reach authorize, URL:', page.url());
+      }
+
+      await sleep(5000);
+      console.log('anyrouter: final URL:', page.url());
+      loggedIn = !page.url().includes('login');
+    } else {
+      console.log('anyrouter: click did not navigate to GitHub');
+    }
+  } else {
+    console.log('anyrouter: no GitHub button found');
+    await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await sleep(5000);
+    loggedIn = !page.url().includes('login');
+    console.log('anyrouter: logged in status:', loggedIn);
+  }
+
+  return loggedIn;
+}
+
+async function doCheckin(page, ctx, BASE, browser) {
+  let checkinSuccess = false;
+  try {
+    const cookies = await ctx.cookies(BASE);
+    const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
+
+    let beforeBalance = null;
+    try {
+      const infoResp = await page.request.get(BASE + '/api/user/info', {
+        headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
+      });
+      if (infoResp.ok()) {
+        const info = await infoResp.json();
+        beforeBalance = info.data?.balance || info.data?.credits || info.balance || info.credits;
+        console.log('anyrouter: balance before checkin:', beforeBalance);
+      }
+    } catch(e) { console.log('anyrouter: failed to get before balance'); }
+
+    const cr = await page.evaluate(async () => {
+      try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
+      catch(e) { return { error: e.message }; }
+    });
+    console.log('anyrouter checkin:', JSON.stringify(cr));
+
+    let afterBalance = null;
+    try {
+      const infoResp2 = await page.request.get(BASE + '/api/user/info', {
+        headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
+      });
+      if (infoResp2.ok()) {
+        const info2 = await infoResp2.json();
+        afterBalance = info2.data?.balance || info2.data?.credits || info2.balance || info2.credits;
+        console.log('anyrouter: balance after checkin:', afterBalance);
+      }
+    } catch(e) { console.log('anyrouter: failed to get after balance'); }
+
+    if (cr && (cr.code === 200 || cr.success === true || cr.message?.includes('成功'))) {
+      checkinSuccess = true;
+      console.log('anyrouter: checkin successful (API returned success)');
+    }
+    if (beforeBalance !== null && afterBalance !== null) {
+      const diff = afterBalance - beforeBalance;
+      console.log('anyrouter: balance change:', diff);
+      if (diff >= 25) {
+        checkinSuccess = true;
+        console.log('anyrouter: balance increased by', diff, '-> checkin successful!');
+      }
+    }
+  } catch(e) { console.log('anyrouter checkin error:', e.message); }
+
+  return checkinSuccess;
 }
 
 module.exports = { run };

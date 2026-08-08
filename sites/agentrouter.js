@@ -20,7 +20,66 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
 
-  // 使用 sing-box 本地 HTTP 代理 (port 1080)
+  // 先尝试直接访问（无需代理）
+  console.log('agentrouter: trying direct access...');
+  try {
+    const browser = await firefox.launch({
+      headless: false,
+      args: ['--no-sandbox']
+    });
+
+    const ctx = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 800 },
+      locale: 'en-US'
+    });
+
+    await ctx.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    });
+
+    console.log('agentrouter: clearing old cookies...');
+    await ctx.clearCookies();
+
+    const page = await ctx.newPage();
+    page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
+    page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
+
+    try {
+      await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await sleep(5000);
+      console.log('agentrouter direct URL:', page.url());
+      const loggedIn = await handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser);
+      const checkinSuccess = loggedIn ? await doCheckin(page, ctx, BASE, browser) : false;
+
+      const cookies = await ctx.cookies(BASE);
+      if (cookies.length > 0) {
+        const all = await loadCookies();
+        all.agentrouter = cookies;
+        await saveCookies(all);
+        console.log('agentrouter cookies saved:', cookies.length);
+      }
+
+      await browser.close();
+      console.log('agentrouter done, checkinSuccess:', checkinSuccess);
+      return { success: true, checkinSuccess };
+    } catch (e) {
+      console.log('agentrouter: direct access failed:', e.message);
+      await browser.close();
+      throw e;
+    }
+  } catch (e) {
+    console.log('agentrouter: direct failed, trying proxy...');
+    return await runWithProxy(config);
+  }
+}
+
+async function runWithProxy(config) {
+  const GH_USER = config.GH_USER || process.env.GH_USER || '';
+  const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
+  const BASE = 'https://agentrouter.org';
   const PROXY = { server: 'http://127.0.0.1:1080' };
 
   const browser = await firefox.launch({
@@ -41,7 +100,7 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  console.log('agentrouter: clearing old cookies...');
+  console.log('agentrouter (proxy): clearing old cookies...');
   await ctx.clearCookies();
 
   const page = await ctx.newPage();
@@ -49,68 +108,27 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    // 先尝试直接访问，如果失败再用代理
-    let loggedIn = false;
-    let checkinSuccess = false;
+    console.log('agentrouter (proxy): navigating via proxy...');
+    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await sleep(5000);
+    console.log('agentrouter (proxy) URL:', page.url());
 
-    // 尝试通过代理访问
-    try {
-      console.log('agentrouter: navigating via proxy...');
-      await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 90000 });
-      await sleep(5000);
-      console.log('agentrouter URL:', page.url());
-    } catch (e) {
-      console.log('agentrouter: proxy timeout, trying direct access...');
-      await browser.close();
-
-      // 直接访问（无代理）
-      const browser2 = await firefox.launch({
-        headless: false,
-        args: ['--no-sandbox']
-      });
-      const ctx2 = await browser2.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        viewport: { width: 1280, height: 800 },
-        locale: 'en-US'
-      });
-      await ctx2.addInitScript(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-      });
-      await ctx2.clearCookies();
-
-      const page2 = await ctx2.newPage();
-      page2.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
-      page2.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
-
-      console.log('agentrouter: navigating direct...');
-      await page2.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await sleep(5000);
-      console.log('agentrouter direct URL:', page2.url());
-
-      loggedIn = await handleLogin(page2, ctx2, BASE, GH_USER, GH_PASS, browser2);
-      checkinSuccess = loggedIn ? await doCheckin(page2, ctx2, BASE, browser2) : false;
-    }
-
-    if (!loggedIn) {
-      loggedIn = await handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser);
-      checkinSuccess = loggedIn ? await doCheckin(page, ctx, BASE, browser) : false;
-    }
+    const loggedIn = await handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser);
+    const checkinSuccess = loggedIn ? await doCheckin(page, ctx, BASE, browser) : false;
 
     const cookies = await ctx.cookies(BASE);
     if (cookies.length > 0) {
       const all = await loadCookies();
       all.agentrouter = cookies;
       await saveCookies(all);
-      console.log('agentrouter cookies saved:', cookies.length);
+      console.log('agentrouter (proxy) cookies saved:', cookies.length);
     }
 
     await browser.close();
-    console.log('agentrouter done, checkinSuccess:', checkinSuccess);
+    console.log('agentrouter (proxy) done, checkinSuccess:', checkinSuccess);
     return { success: true, checkinSuccess };
   } catch (e) {
-    console.error('agentrouter error:', e.message);
+    console.error('agentrouter (proxy) error:', e.message);
     await browser.close();
     return { success: false, error: e.message };
   }
@@ -132,27 +150,7 @@ async function handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser) {
 
   if (await githubBtn.count() > 0) {
     console.log('agentrouter: clicking GitHub OAuth button...');
-    // 先尝试获取按钮的 href
-    const href = await page.evaluate((sel) => {
-      const btn = document.querySelector(sel);
-      if (!btn) return null;
-      // 查找父级 a 标签的 href
-      let a = btn.closest('a');
-      if (a && a.href) return a.href;
-      // 查找按钮的 onclick
-      return btn.onclick ? 'has-onclick' : null;
-    }, '[aria-label="github_logo"], .semi-icon-github_logo');
-
-    console.log('agentrouter: button href:', href);
-
-    if (href && href !== 'about:blank' && !href.startsWith('javascript:')) {
-      console.log('agentrouter: navigating directly to:', href);
-      await page.goto(href, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(3000);
-    } else {
-      await githubBtn.first().click({ force: true });
-    }
-
+    await githubBtn.first().click({ force: true });
     await sleep(5000);
     console.log('agentrouter after click, URL:', page.url());
 
