@@ -1,4 +1,4 @@
-// sites/anyrouter.js — 使用 sing-box 代理 + Chromium
+// sites/anyrouter.js — 使用 sing-box 代理 + Chromium，尝试 OAuth
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -60,9 +60,9 @@ async function run(config = {}) {
   });
 
   try {
-    // 直接访问 console/personal
-    console.log('anyrouter: navigating to /console/personal via proxy...');
-    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // 先尝试访问 console
+    console.log('anyrouter: navigating to /console...');
+    await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(3000);
     console.log('anyrouter URL:', page.url());
 
@@ -70,10 +70,10 @@ async function run(config = {}) {
     console.log('anyrouter: logged in status:', loggedIn);
 
     if (!loggedIn) {
-      // 尝试 /oauth/github
+      // 尝试访问 OAuth 页面
       console.log('anyrouter: trying /oauth/github...');
       await page.goto(BASE + '/oauth/github', { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(8000);
+      await sleep(5000);
       console.log('anyrouter oauth URL:', page.url());
 
       if (page.url().includes('github.com')) {
@@ -90,16 +90,6 @@ async function run(config = {}) {
               if (await authBtn.count() > 0) await authBtn.click({ force: true });
             } catch(e) {}
             await sleep(5000);
-            loggedIn = !page.url().includes('login');
-          }
-        } else {
-          try {
-            await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-            const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-            if (await authBtn.count() > 0) await authBtn.click({ force: true });
-            await sleep(5000);
-            loggedIn = !page.url().includes('login');
-          } catch(e) {
             loggedIn = !page.url().includes('login');
           }
         }
