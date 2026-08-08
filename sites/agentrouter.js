@@ -153,79 +153,67 @@ async function handleLogin(page, ctx, BASE, browser) {
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
-    // 获取 cookies 和 headers
+    // 获取 cookies
     const cookies = await ctx.cookies(BASE);
-    const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
     console.log('agentrouter: cookie count:', cookies.length);
     console.log('agentrouter: cookie names:', cookies.map(c => c.name).join(', '));
 
-    // 方法1: 通过 page.evaluate + fetch
-    let beforeBalance = null;
-    try {
-      const result = await page.evaluate(async () => {
-        try {
-          const resp = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
-          const text = await resp.text();
-          try { return { ok: resp.ok, status: resp.status, data: JSON.parse(text) }; }
-          catch(e) { return { ok: resp.ok, status: resp.status, text: text.substring(0, 200) }; }
-        } catch(e) { return { error: e.message }; }
-      });
-      console.log('agentrouter info (eval):', JSON.stringify(result).substring(0, 300));
-      if (result.data) {
-        beforeBalance = result.data?.balance || result.data?.credits || result.balance || result.credits;
-        console.log('agentrouter: balance before checkin:', beforeBalance);
-      }
-    } catch(e) { console.log('agentrouter: failed to get before balance via eval:', e.message); }
+    // 通过 page.evaluate + fetch 执行所有 API 调用
+    const result = await page.evaluate(async () => {
+      const results = {};
 
-    // 执行签到
-    const checkinResult = await page.evaluate(async () => {
+      // Get before balance
       try {
-        const r = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
-        const text = await r.text();
-        try { return { status: r.status, ok: r.ok, data: JSON.parse(text) }; }
-        catch(e) { return { status: r.status, ok: r.ok, text: text.substring(0, 200) }; }
-      } catch(e) { return { error: e.message }; }
+        const resp1 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
+        const text1 = await resp1.text();
+        try { results.before = JSON.parse(text1); }
+        catch(e) { results.beforeText = text1.substring(0, 300); }
+        results.beforeStatus = resp1.status;
+      } catch(e) { results.beforeError = e.message; }
+
+      // Checkin
+      try {
+        const resp2 = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
+        const text2 = await resp2.text();
+        try { results.checkin = JSON.parse(text2); }
+        catch(e) { results.checkinText = text2.substring(0, 300); }
+        results.checkinStatus = resp2.status;
+      } catch(e) { results.checkinError = e.message; }
+
+      // Get after balance
+      try {
+        const resp3 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
+        const text3 = await resp3.text();
+        try { results.after = JSON.parse(text3); }
+        catch(e) { results.afterText = text3.substring(0, 300); }
+        results.afterStatus = resp3.status;
+      } catch(e) { results.afterError = e.message; }
+
+      return results;
     });
-    console.log('agentrouter checkin (eval):', JSON.stringify(checkinResult).substring(0, 300));
 
-    // 方法2: 通过 page.request
-    try {
-      const resp = await page.request.post(BASE + '/api/user/checkin', {
-        headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
-      });
-      console.log('agentrouter checkin status:', resp.status());
-      if (resp.ok()) {
-        const text = await resp.text();
-        try {
-          const json = JSON.parse(text);
-          console.log('agentrouter checkin result:', JSON.stringify(json));
-        } catch(e) {
-          console.log('agentrouter checkin response (not JSON):', text.substring(0, 200));
-        }
-      }
-    } catch(e) { console.log('agentrouter checkin request error:', e.message); }
+    console.log('agentrouter result:', JSON.stringify(result).substring(0, 800));
 
-    // 获取签到后余额
+    // 提取余额
+    let beforeBalance = null;
     let afterBalance = null;
-    try {
-      const result2 = await page.evaluate(async () => {
-        try {
-          const resp = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
-          const text = await resp.text();
-          try { return { ok: resp.ok, data: JSON.parse(text) }; }
-          catch(e) { return { ok: resp.ok, text: text.substring(0, 200) }; }
-        } catch(e) { return { error: e.message }; }
-      });
-      console.log('agentrouter info after (eval):', JSON.stringify(result2).substring(0, 300));
-      if (result2.data) {
-        afterBalance = result2.data?.balance || result2.data?.credits || result2.balance || result2.credits;
-        console.log('agentrouter: balance after checkin:', afterBalance);
-      }
-    } catch(e) { console.log('agentrouter: failed to get after balance:', e.message); }
+
+    if (result.before) {
+      beforeBalance = result.before.data?.balance || result.before.data?.credits ||
+                      result.before.balance || result.before.credits;
+    }
+    console.log('agentrouter: balance before checkin:', beforeBalance);
+
+    if (result.after) {
+      afterBalance = result.after.data?.balance || result.after.data?.credits ||
+                     result.after.balance || result.after.credits;
+    }
+    console.log('agentrouter: balance after checkin:', afterBalance);
 
     // 判断签到成功
-    if (checkinResult && checkinResult.data) {
-      if (checkinResult.data.code === 200 || checkinResult.data.success === true) {
+    if (result.checkin) {
+      if (result.checkin.code === 200 || result.checkin.success === true ||
+          (result.checkin.message && result.checkin.message.includes('成功'))) {
         checkinSuccess = true;
         console.log('agentrouter: checkin successful (API returned success)');
       }
@@ -236,6 +224,21 @@ async function doCheckin(page, ctx, BASE) {
       if (diff >= 25) {
         checkinSuccess = true;
         console.log('agentrouter: balance increased by', diff, '-> checkin successful!');
+      }
+    }
+
+    // 如果 API 返回 HTML，检查是否有成功标志
+    if (!checkinSuccess) {
+      const checkinText = result.checkinText || '';
+      const beforeText = result.beforeText || '';
+      const afterText = result.afterText || '';
+      console.log('agentrouter: checkin text:', checkinText.substring(0, 200));
+      console.log('agentrouter: before text:', beforeText.substring(0, 200));
+      console.log('agentrouter: after text:', afterText.substring(0, 200));
+
+      if (checkinText.includes('签到成功') || checkinText.includes('success') ||
+          beforeText.includes('签到成功') || afterText.includes('签到成功')) {
+        checkinSuccess = true;
       }
     }
   } catch(e) { console.log('agentrouter checkin error:', e.message); }
