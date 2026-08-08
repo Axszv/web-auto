@@ -1,5 +1,5 @@
-// sites/anyrouter.js — 通过 API 获取 OAuth URL 绕过按钮点击问题
-const { firefox } = require('playwright');
+// sites/anyrouter.js — 使用 Chromium，恢复 session cookie，尝试 /oauth/github
+const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
@@ -19,13 +19,11 @@ async function run(config = {}) {
   const GH_USER = config.GH_USER || process.env.GH_USER || '';
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
-  const PROXY = { server: 'http://127.0.0.1:1080' };
 
-  console.log('anyrouter: launching firefox via proxy...');
-  const browser = await firefox.launch({
+  console.log('anyrouter: launching chromium...');
+  const browser = await chromium.launch({
     headless: false,
-    args: ['--no-sandbox'],
-    proxy: PROXY
+    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled']
   });
 
   const ctx = await browser.newContext({
@@ -50,121 +48,31 @@ async function run(config = {}) {
     }
   }
 
-  await ctx.clearCookies();
-  if (existingCookies.anyrouter) {
-    const sessionCookies = existingCookies.anyrouter.filter(c => c.name === 'session');
-    if (sessionCookies.length > 0) {
-      await ctx.addCookies(sessionCookies);
-    }
-  }
-
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('anyrouter: navigating to login...');
-    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await sleep(5000);
-    console.log('anyrouter login page URL:', page.url());
+    // 直接访问 console/personal 页面
+    console.log('anyrouter: navigating to /console/personal...');
+    await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(3000);
+    console.log('anyrouter URL:', page.url());
 
-    // 检查是否已登录
-    const cookies = await ctx.cookies(BASE);
-    const hasSession = cookies.some(c => c.name === 'session');
-    console.log('anyrouter: has session cookie:', hasSession);
-
-    let loggedIn = hasSession;
+    let loggedIn = !page.url().includes('login');
+    console.log('anyrouter: logged in status:', loggedIn);
 
     if (!loggedIn) {
-      // 尝试通过 API 获取 OAuth URL
-      console.log('anyrouter: trying to get OAuth URL from API...');
-      const oauthUrl = await page.evaluate(async () => {
-        // Try various API endpoints
-        const endpoints = [
-          '/api/auth/github',
-          '/api/github/login',
-          '/api/authorize/github',
-          '/api/user/auth/github',
-          '/api/login/github'
-        ];
-        for (const ep of endpoints) {
-          try {
-            const resp = await fetch(ep, { method: 'GET', credentials: 'include' });
-            if (resp.ok) {
-              const data = await resp.json().catch(() => null);
-              if (data && (data.url || data.redirect || data.link)) {
-                return data.url || data.redirect || data.link;
-              }
-            }
-          } catch(e) {}
-        }
-        // Try POST instead
-        for (const ep of endpoints) {
-          try {
-            const resp = await fetch(ep, { method: 'POST', credentials: 'include' });
-            if (resp.ok) {
-              const data = await resp.json().catch(() => null);
-              if (data && (data.url || data.redirect || data.link)) {
-                return data.url || data.redirect || data.link;
-              }
-            }
-          } catch(e) {}
-        }
-        return null;
-      });
+      // 尝试 /oauth/github 端点
+      console.log('anyrouter: trying /oauth/github...');
+      await page.goto(BASE + '/oauth/github', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(8000);
+      const oauthUrl = page.url();
+      console.log('anyrouter oauth URL:', oauthUrl);
 
-      if (oauthUrl) {
-        console.log('anyrouter: got OAuth URL:', oauthUrl);
-        await page.goto(oauthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await sleep(3000);
-      }
-
-      // 检查当前 URL
-      console.log('anyrouter: current URL:', page.url());
-
-      if (!page.url().includes('github.com')) {
-        // 尝试点击按钮并观察导航
-        let githubBtn = page.locator('[aria-label="github_logo"]');
-        if (await githubBtn.count() === 0) githubBtn = page.locator('text=Continue with GitHub');
-        if (await githubBtn.count() === 0) githubBtn = page.locator('.semi-icon-github_logo');
-
-        if (await githubBtn.count() > 0) {
-          console.log('anyrouter: clicking GitHub OAuth button...');
-
-          // 监听导航事件
-          let navigatedUrl = null;
-          page.once('response', async resp => {
-            if (resp.url().includes('github.com') || resp.url().includes('authorize')) {
-              navigatedUrl = resp.url();
-            }
-          });
-
-          // 尝试多种方式点击
-          await githubBtn.first().click({ force: true });
-          await sleep(2000);
-
-          if (!page.url().includes('github.com') && !navigatedUrl) {
-            console.log('anyrouter: first click did not navigate, trying JS...');
-            await page.evaluate(() => {
-              const btn = document.querySelector('[aria-label="github_logo"]') ||
-                          document.querySelector('.semi-icon-github_logo');
-              if (btn) {
-                // 查找所有可能的事件
-                const all = getEventListeners ? getEventListeners(btn) : {};
-                console.log('anyrouter: event listeners:', Object.keys(all).join(', '));
-                btn.click();
-              }
-            });
-            await sleep(3000);
-          }
-
-          console.log('anyrouter: after click, URL:', page.url());
-        }
-      }
-
-      if (page.url().includes('github.com')) {
+      if (oauthUrl.includes('github.com')) {
         console.log('anyrouter: on GitHub page');
-        if (page.url().includes('/login')) {
+        if (oauthUrl.includes('/login')) {
           console.log('anyrouter: on GitHub login page');
           await page.locator('input[name="login"]').first().fill(GH_USER);
           await page.locator('input[name="password"]').first().fill(GH_PASS);
@@ -193,10 +101,48 @@ async function run(config = {}) {
       }
 
       if (!loggedIn) {
-        console.log('anyrouter: trying console page...');
-        await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await sleep(3000);
-        loggedIn = !page.url().includes('login');
+        // 尝试找 GitHub 按钮
+        let githubBtn = page.locator('[aria-label="github_logo"]');
+        if (await githubBtn.count() === 0) githubBtn = page.locator('text=Continue with GitHub');
+        if (await githubBtn.count() === 0) githubBtn = page.locator('.semi-icon-github_logo');
+
+        console.log('anyrouter: found GitHub button:', await githubBtn.count());
+
+        if (await githubBtn.count() > 0) {
+          console.log('anyrouter: clicking GitHub OAuth button...');
+          await githubBtn.first().click({ force: true });
+          await sleep(5000);
+          console.log('anyrouter: after click, URL:', page.url());
+
+          if (page.url().includes('github.com')) {
+            console.log('anyrouter: on GitHub page');
+            if (page.url().includes('/login')) {
+              await page.locator('input[name="login"]').first().fill(GH_USER);
+              await page.locator('input[name="password"]').first().fill(GH_PASS);
+              await page.locator('input[type="submit"]').first().click();
+              await sleep(2000);
+              if (!page.url().includes('/login')) {
+                try {
+                  await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+                  const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+                  if (await authBtn.count() > 0) await authBtn.click({ force: true });
+                } catch(e) {}
+                await sleep(5000);
+                loggedIn = !page.url().includes('login');
+              }
+            } else {
+              try {
+                await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
+                const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+                if (await authBtn.count() > 0) await authBtn.click({ force: true });
+                await sleep(5000);
+                loggedIn = !page.url().includes('login');
+              } catch(e) {
+                loggedIn = !page.url().includes('login');
+              }
+            }
+          }
+        }
       }
     }
 

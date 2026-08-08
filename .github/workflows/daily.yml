@@ -11,7 +11,7 @@ permissions:
 jobs:
   auto:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,36 +31,11 @@ jobs:
       - name: Install system deps for Firefox
         run: npx playwright install-deps firefox
 
-      - name: Download sing-box
-        run: |
-          SINGBOX_VER="1.13.16"
-          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz" -o /tmp/sing-box.tar.gz
-          mkdir -p /tmp/sing-box
-          tar -xzf /tmp/sing-box.tar.gz -C /tmp/sing-box --strip-components=1
-          ls -la /tmp/sing-box/
-
       - name: Setup virtual display
         run: |
           sudo apt-get install -y xvfb
           Xvfb :99 -screen 0 1280x800x24 &
           echo "DISPLAY=:99" >> $GITHUB_ENV
-
-      - name: Start sing-box proxy
-        run: |
-          /tmp/sing-box/sing-box run -c singbox.json > /tmp/sing-box.log 2>&1 &
-          echo $! > /tmp/singbox.pid
-          sleep 3
-          if kill -0 $(cat /tmp/singbox.pid) 2>/dev/null; then
-            echo "sing-box started successfully"
-            curl -s --max-time 5 http://127.0.0.1:1080/ -o /dev/null && echo "proxy port 1080 OK"
-            # Test proxy connectivity
-            curl -s --max-time 10 -x http://127.0.0.1:1080 -o /dev/null -w "agentrouter via proxy: %{http_code}\n" https://agentrouter.org/
-            curl -s --max-time 10 -x http://127.0.0.1:1080 -o /dev/null -w "anyrouter via proxy: %{http_code}\n" https://anyrouter.top/
-          else
-            echo "sing-box failed to start:"
-            cat /tmp/sing-box.log
-            exit 1
-          fi
 
       - name: Run automation
         run: node auto.js
@@ -68,12 +43,6 @@ jobs:
           DISPLAY: :99
           GH_USER: ${{ secrets.GH_USER }}
           GH_PASS: ${{ secrets.GH_PASS }}
-
-      - name: Kill sing-box
-        if: always()
-        run: |
-          kill $(cat /tmp/singbox.pid) 2>/dev/null || true
-          cat /tmp/sing-box.log 2>/dev/null | tail -20 || true
 
       - name: Commit and push updated cookies
         run: |
