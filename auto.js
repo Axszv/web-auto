@@ -1,4 +1,3 @@
-
 const fs = require('fs');
 const path = require('path');
 
@@ -28,7 +27,6 @@ async function writeLog(log) {
 
 const sites = [
   { name: 'gogocs', mod: require('./sites/gogocs') },
-  { name: 'sharedchat', mod: require('./sites/sharedchat') },
   { name: 'agentrouter', mod: require('./sites/agentrouter') },
   { name: 'anyrouter', mod: require('./sites/anyrouter') },
 ];
