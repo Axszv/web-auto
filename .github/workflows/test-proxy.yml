@@ -6,15 +6,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo "=== Test 1: Direct IP to workers.dev ==="
-          for ip in 104.18.39.209 172.67.185.40 104.16.132.229 172.64.155.175; do
-            code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "https://epic-gcp-relay.lkjh05.workers.dev/" --resolve "epic-gcp-relay.lkjh05.workers.dev:443:$ip" 2>/dev/null)
-            echo "$ip: $code"
-          done
-          echo "=== Test 2: GCP IPs from blog API ==="
-          for ip in 8.212.12.98 155.248.170.249 8.219.243.132 47.254.86.133 141.147.147.28; do
-            code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "https://epic-gcp-relay.lkjh05.workers.dev/" --resolve "epic-gcp-relay.lkjh05.workers.dev:443:$ip" 2>/dev/null)
-            echo "$ip: $code"
-          done
-          echo "=== Test 3: Test VLESS connectivity via workers ==="
-          curl -s --max-time 10 -v "https://epic-gcp-relay.lkjh05.workers.dev/" 2>&1 | grep -iE 'HTTP|location|server' | head -10
+          echo "=== Test epic-gcp-relay workers ==="
+          curl -sv "https://epic-gcp-relay.lkjh05.workers.dev/" 2>&1 | grep -iE '< |> HTTP|location|server|cf-' | head -20
+          echo "=== Test blog API ==="
+          curl -s "https://ipdb.api.030101.xyz/?type=bestproxy&country=true" | head -3
+          echo "=== Test anyrouter without proxy ==="
+          curl -s --max-time 10 -o /dev/null -w "anyrouter direct: %{http_code}\n" https://anyrouter.top/
+          echo "=== Test agentrouter without proxy ==="
+          curl -s --max-time 10 -o /dev/null -w "agentrouter direct: %{http_code}\n" https://agentrouter.org/
