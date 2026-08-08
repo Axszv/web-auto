@@ -14,18 +14,18 @@
     {
       "type": "vless",
       "tag": "vless-out",
-      "server": "104.18.39.209",
+      "server": "proxyip.jp.cmliussss.net",
       "server_port": 443,
-      "uuid": "5cae6713-ede5-4d31-9edb-65537a4607a8",
+      "uuid": "4f9a17f1-c23f-4791-8a10-86cf77d274a8",
       "tls": {
         "enabled": true,
-        "server_name": "new.axs.dpdns.org"
+        "server_name": "epic-gcp-relay.lkjh05.workers.dev"
       },
       "transport": {
         "type": "ws",
-        "path": "/?ed=2048",
+        "path": "/?ed=2560",
         "headers": {
-          "Host": "new.axs.dpdns.org"
+          "Host": "epic-gcp-relay.lkjh05.workers.dev"
         }
       }
     },

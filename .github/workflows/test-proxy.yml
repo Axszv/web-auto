@@ -6,11 +6,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo "=== Test epic-gcp-relay workers ==="
-          curl -sv "https://epic-gcp-relay.lkjh05.workers.dev/" 2>&1 | grep -iE '< |> HTTP|location|server|cf-' | head -20
-          echo "=== Test blog API ==="
-          curl -s "https://ipdb.api.030101.xyz/?type=bestproxy&country=true" | head -3
-          echo "=== Test anyrouter without proxy ==="
-          curl -s --max-time 10 -o /dev/null -w "anyrouter direct: %{http_code}\n" https://anyrouter.top/
-          echo "=== Test agentrouter without proxy ==="
-          curl -s --max-time 10 -o /dev/null -w "agentrouter direct: %{http_code}\n" https://agentrouter.org/
+          echo "=== Test proxyip.jp reachable ==="
+          curl -s --max-time 10 -o /dev/null -w "proxyip.jp: %{http_code}\n" https://proxyip.jp.cmliussss.net/
+          echo "=== Test workers.dev reachable ==="
+          curl -s --max-time 10 -o /dev/null -w "workers: %{http_code}\n" https://epic-gcp-relay.lkjh05.workers.dev/
+          echo "=== Test anyrouter via sing-box ==="
+          curl -s --max-time 15 -o /dev/null -w "anyrouter: %{http_code}\n" https://anyrouter.top/
