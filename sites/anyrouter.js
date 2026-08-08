@@ -1,5 +1,5 @@
-// sites/anyrouter.js — 优先直接访问，代理备用
-const { firefox } = require('playwright');
+// sites/anyrouter.js — 使用 Chromium 尝试 GitHub OAuth
+const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
@@ -20,131 +20,100 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
-  console.log('anyrouter: trying direct access...');
-  try {
-    const browser = await firefox.launch({ headless: false, args: ['--no-sandbox'] });
-    const ctx = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      viewport: { width: 1280, height: 800 }, locale: 'en-US'
-    });
-    await ctx.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-    });
-    await ctx.clearCookies();
-    const page = await ctx.newPage();
-    page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
-    page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
+  console.log('anyrouter: launching chromium...');
+  const browser = await chromium.launch({
+    headless: false,
+    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled']
+  });
 
-    try {
-      await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await sleep(8000);
-      console.log('anyrouter after main:', page.url());
-
-      let loggedIn = false;
-      let checkinSuccess = false;
-
-      console.log('anyrouter: navigating to /login...');
-      await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await sleep(5000);
-      console.log('anyrouter login page URL:', page.url());
-
-      loggedIn = await handleLogin(page, ctx, BASE, browser);
-      checkinSuccess = loggedIn ? await doCheckin(page, ctx, BASE) : false;
-      await saveCtxCookies(ctx, BASE);
-      await browser.close();
-      console.log('anyrouter done, checkinSuccess:', checkinSuccess);
-      return { success: true, checkinSuccess };
-    } catch (e) {
-      console.log('anyrouter direct failed:', e.message);
-      await browser.close();
-      throw e;
-    }
-  } catch (e) {
-    console.log('anyrouter: direct failed, trying proxy...');
-    return await runWithProxy(config);
-  }
-}
-
-async function runWithProxy(config) {
-  const GH_USER = config.GH_USER || process.env.GH_USER || '';
-  const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
-  const BASE = 'https://anyrouter.top';
-  const PROXY = { server: 'http://127.0.0.1:1080' };
-
-  const browser = await firefox.launch({ headless: false, args: ['--no-sandbox'], proxy: PROXY });
   const ctx = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    viewport: { width: 1280, height: 800 }, locale: 'en-US'
+    viewport: { width: 1280, height: 800 },
+    locale: 'en-US'
   });
+
   await ctx.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
   });
+
+  // 尝试加载现有 session cookie
+  const existingCookies = await loadCookies();
+  if (existingCookies.anyrouter) {
+    const sessionCookies = existingCookies.anyrouter.filter(c => c.name === 'session');
+    if (sessionCookies.length > 0) {
+      console.log('anyrouter: restoring existing session cookie...');
+      await ctx.addCookies(sessionCookies);
+    }
+  }
+
   await ctx.clearCookies();
+  if (existingCookies.anyrouter) {
+    const sessionCookies = existingCookies.anyrouter.filter(c => c.name === 'session');
+    if (sessionCookies.length > 0) {
+      await ctx.addCookies(sessionCookies);
+      console.log('anyrouter: restored session cookie');
+    }
+  }
+
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
+  page.on('response', async resp => {
+    if (resp.url().includes('api/user') || resp.url().includes('checkin')) {
+      const status = resp.status();
+      const contentType = resp.headers()['content-type'] || '';
+      console.log(`[API] ${resp.url()} -> ${status} (${contentType.substring(0, 50)})`);
+    }
+  });
 
   try {
-    console.log('anyrouter (proxy): starting via proxy...');
+    console.log('anyrouter: navigating to main...');
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(8000);
-    console.log('anyrouter (proxy) after main:', page.url());
+    console.log('anyrouter after main:', page.url());
 
     let loggedIn = false;
     let checkinSuccess = false;
 
-    console.log('anyrouter (proxy): navigating to /login...');
+    console.log('anyrouter: navigating to /login...');
     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
-    console.log('anyrouter (proxy) login page URL:', page.url());
+    console.log('anyrouter login page URL:', page.url());
 
-    loggedIn = await handleLogin(page, ctx, BASE, browser);
+    loggedIn = await handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser);
     checkinSuccess = loggedIn ? await doCheckin(page, ctx, BASE) : false;
     await saveCtxCookies(ctx, BASE);
     await browser.close();
-    console.log('anyrouter (proxy) done, checkinSuccess:', checkinSuccess);
+    console.log('anyrouter done, checkinSuccess:', checkinSuccess);
     return { success: true, checkinSuccess };
   } catch (e) {
-    console.error('anyrouter (proxy) error:', e.message);
+    console.error('anyrouter error:', e.message);
     await browser.close();
     return { success: false, error: e.message };
   }
 }
 
-async function handleLogin(page, ctx, BASE, browser) {
+async function handleLogin(page, ctx, BASE, GH_USER, GH_PASS, browser) {
   let loggedIn = false;
 
-  // 获取页面完整信息
-  const pageInfo = await page.evaluate(() => {
-    const githubBtn = document.querySelector('[aria-label="github_logo"]') ||
-                      document.querySelector('.semi-icon-github_logo');
-    if (!githubBtn) return { found: false };
+  // 检查是否已有 session cookie
+  const existingCookies = await ctx.cookies(BASE);
+  const hasSession = existingCookies.some(c => c.name === 'session');
+  console.log('anyrouter: has session cookie:', hasSession);
 
-    // 检查所有父级 a 标签
-    let parent = githubBtn.parentElement;
-    let href = null;
-    while (parent) {
-      if (parent.tagName === 'A' && parent.href && parent.href !== 'about:blank') {
-        href = parent.href;
-        break;
-      }
-      parent = parent.parentElement;
-    }
-
-    return {
-      found: true,
-      href,
-      onclick: githubBtn.getAttribute('onclick'),
-      className: githubBtn.className,
-      tagName: githubBtn.tagName
-    };
-  });
-
-  console.log('anyrouter: page info:', JSON.stringify(pageInfo).substring(0, 300));
+  if (hasSession) {
+    console.log('anyrouter: session exists, trying console directly...');
+    await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(3000);
+    loggedIn = !page.url().includes('login');
+    console.log('anyrouter: logged in status:', loggedIn);
+    if (loggedIn) return true;
+  }
 
   // 查找 GitHub 按钮
   let githubBtn = page.locator('[aria-label="github_logo"]');
@@ -156,17 +125,32 @@ async function handleLogin(page, ctx, BASE, browser) {
   if (await githubBtn.count() > 0) {
     console.log('anyrouter: clicking GitHub OAuth button...');
 
-    if (pageInfo.href && pageInfo.href.includes('github')) {
-      console.log('anyrouter: navigating to:', pageInfo.href);
-      await page.goto(pageInfo.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(3000);
-    } else if (pageInfo.onclick) {
-      console.log('anyrouter: executing onclick:', pageInfo.onclick.substring(0, 200));
-      await page.evaluate((onclick) => {
-        const btn = document.querySelector('[aria-label="github_logo"]') ||
-                    document.querySelector('.semi-icon-github_logo');
-        if (btn && btn.onclick) btn.onclick();
-      }, pageInfo.onclick);
+    // 尝试获取按钮的 href
+    const btnInfo = await page.evaluate(() => {
+      const btn = document.querySelector('[aria-label="github_logo"]') ||
+                  document.querySelector('.semi-icon-github_logo');
+      if (!btn) return null;
+
+      let parent = btn.parentElement;
+      while (parent) {
+        if (parent.tagName === 'A' && parent.href && parent.href !== 'about:blank') {
+          return { href: parent.href, type: 'link' };
+        }
+        parent = parent.parentElement;
+      }
+
+      return {
+        onclick: btn.getAttribute('onclick'),
+        className: btn.className,
+        tagName: btn.tagName
+      };
+    });
+
+    console.log('anyrouter: button info:', JSON.stringify(btnInfo).substring(0, 200));
+
+    if (btnInfo && btnInfo.href && btnInfo.href.includes('github')) {
+      console.log('anyrouter: navigating to:', btnInfo.href);
+      await page.goto(btnInfo.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await sleep(3000);
     } else {
       await githubBtn.first().click({ force: true });
@@ -188,8 +172,8 @@ async function handleLogin(page, ctx, BASE, browser) {
       console.log('anyrouter: on GitHub page');
       if (page.url().includes('/login')) {
         console.log('anyrouter: on GitHub login page');
-        await page.locator('input[name="login"]').first().fill(process.env.GH_USER || '');
-        await page.locator('input[name="password"]').first().fill(process.env.GH_PASS || '');
+        await page.locator('input[name="login"]').first().fill(GH_USER);
+        await page.locator('input[name="password"]').first().fill(GH_PASS);
         await page.locator('input[type="submit"]').first().click();
         await sleep(2000);
         if (page.url().includes('/login')) {
@@ -287,10 +271,8 @@ async function doCheckin(page, ctx, BASE) {
     }
 
     if (!checkinSuccess) {
-      console.log('anyrouter: checkin text:', (result.checkinText || '').substring(0, 200));
-      console.log('anyrouter: before text:', (result.beforeText || '').substring(0, 200));
-      console.log('anyrouter: after text:', (result.afterText || '').substring(0, 200));
       console.log('anyrouter: before status:', result.beforeStatus, 'checkin status:', result.checkinStatus, 'after status:', result.afterStatus);
+      console.log('anyrouter: checkin text:', (result.checkinText || '').substring(0, 200));
     }
   } catch(e) { console.log('anyrouter checkin error:', e.message); }
 
