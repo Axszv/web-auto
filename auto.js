@@ -75,7 +75,7 @@ const sites = [
   console.log(text);
   await writeLog(log);
 
-  // 签到失败只记录警告，不中断 workflow（因为可能是 OAuth 或网络问题）
+  // 签到失败只记录警告，不中断 workflow
   if (checkinFailures.length > 0) {
     log.push('WARNING: The following sites may have checkin failures: ' + checkinFailures.join(', '));
     log.push('Please check balance increase (+25) in next run.');

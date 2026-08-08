@@ -137,6 +137,7 @@ async function run(config = {}) {
         const cookies = await ctx.cookies(BASE);
         const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
 
+        // 获取签到前余额
         let beforeBalance = null;
         try {
           const infoResp = await page.request.get(BASE + '/api/user/info', {
@@ -149,6 +150,7 @@ async function run(config = {}) {
           }
         } catch(e) { console.log('agentrouter: failed to get before balance'); }
 
+        // 签到
         const resp = await page.request.post(BASE + '/api/user/checkin', {
           headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
         });
@@ -156,10 +158,16 @@ async function run(config = {}) {
 
         let checkinResult = null;
         if (resp.ok()) {
-          checkinResult = await resp.json();
-          console.log('agentrouter checkin result:', JSON.stringify(checkinResult));
+          try {
+            checkinResult = await resp.json();
+            console.log('agentrouter checkin result:', JSON.stringify(checkinResult));
+          } catch(e) {
+            const text = await resp.text();
+            console.log('agentrouter checkin response (not JSON):', text.substring(0, 200));
+          }
         }
 
+        // 获取签到后余额
         let afterBalance = null;
         try {
           const infoResp2 = await page.request.get(BASE + '/api/user/info', {
@@ -172,6 +180,7 @@ async function run(config = {}) {
           }
         } catch(e) { console.log('agentrouter: failed to get after balance'); }
 
+        // 判断签到是否成功
         if (checkinResult) {
           if (checkinResult.code === 200 || checkinResult.success === true) {
             checkinSuccess = true;
