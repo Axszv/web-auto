@@ -59,6 +59,8 @@ async function run(config = {}) {
     let url = page.url();
     console.log('anyrouter URL:', url);
 
+    let checkinSuccess = false;
+
     if (url.includes('login') || url.includes('oauth')) {
       console.log('anyrouter: not logged in');
       await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -112,12 +114,58 @@ async function run(config = {}) {
     if (!page.url().includes('login')) {
       console.log('anyrouter: logged in!');
       try {
+        const cookies = await ctx.cookies(BASE);
+        const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
+
+        // 先获取签到前余额
+        let beforeBalance = null;
+        try {
+          const infoResp = await page.request.get(BASE + '/api/user/info', {
+            headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
+          });
+          if (infoResp.ok()) {
+            const info = await infoResp.json();
+            beforeBalance = info.data?.balance || info.data?.credits || info.balance || info.credits;
+            console.log('anyrouter: balance before checkin:', beforeBalance);
+          }
+        } catch(e) {}
+
+        // 签到
         const cr = await page.evaluate(async () => {
           try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
           catch(e) { return { error: e.message }; }
         });
         console.log('anyrouter checkin:', JSON.stringify(cr));
-      } catch(e) {}
+
+        // 获取签到后余额
+        let afterBalance = null;
+        try {
+          const infoResp2 = await page.request.get(BASE + '/api/user/info', {
+            headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
+          });
+          if (infoResp2.ok()) {
+            const info2 = await infoResp2.json();
+            afterBalance = info2.data?.balance || info2.data?.credits || info2.balance || info2.credits;
+            console.log('anyrouter: balance after checkin:', afterBalance);
+          }
+        } catch(e) {}
+
+        // 判断签到是否成功
+        if (cr && (cr.code === 200 || cr.success === true || cr.message?.includes('成功'))) {
+          checkinSuccess = true;
+          console.log('anyrouter: checkin successful (API returned success)');
+        }
+        if (beforeBalance !== null && afterBalance !== null) {
+          const diff = afterBalance - beforeBalance;
+          console.log('anyrouter: balance change:', diff);
+          if (diff >= 25) {
+            checkinSuccess = true;
+            console.log('anyrouter: balance increased by', diff, '-> checkin successful!');
+          }
+        }
+      } catch(e) {
+        console.log('anyrouter checkin error:', e.message);
+      }
     } else {
       console.log('anyrouter: still on login page');
     }
@@ -131,8 +179,8 @@ async function run(config = {}) {
     }
 
     await browser.close();
-    console.log('anyrouter done');
-    return { success: true };
+    console.log('anyrouter done, checkinSuccess:', checkinSuccess);
+    return { success: true, checkinSuccess };
   } catch (e) {
     console.error('anyrouter error:', e.message);
     await browser.close();
