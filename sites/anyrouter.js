@@ -1,4 +1,4 @@
-// sites/anyrouter.js — 使用住宅代理绕过Cloudflare
+// sites/anyrouter.js — 使用HTTP代理绕过Cloudflare
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +20,7 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
-  const PROXY = { server: 'socks5://proxy.oxylabs.io:55000', username: 'lkjh5_4gW1v', password: 'Lz1979474206_' };
+  const PROXY = { server: 'http://proxy.oxylabs.io:55000', username: 'lkjh5_4gW1v', password: 'Lz1979474206_' };
 
   const browser = await firefox.launch({
     headless: false,
