@@ -1,4 +1,4 @@
-// sites/anyrouter.js — 使用 Chromium，恢复 session cookie，尝试 /oauth/github
+// sites/anyrouter.js — 使用 sing-box 代理 + Chromium
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -19,11 +19,13 @@ async function run(config = {}) {
   const GH_USER = config.GH_USER || process.env.GH_USER || '';
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
+  const PROXY = { server: 'http://127.0.0.1:1080' };
 
-  console.log('anyrouter: launching chromium...');
+  console.log('anyrouter: launching chromium via proxy...');
   const browser = await chromium.launch({
     headless: false,
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled']
+    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
+    proxy: PROXY
   });
 
   const ctx = await browser.newContext({
@@ -51,10 +53,15 @@ async function run(config = {}) {
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
+  page.on('response', async resp => {
+    if (resp.url().includes('api/')) {
+      console.log(`[API] ${resp.url()} -> ${resp.status()} (${resp.headers()['content-type'] || 'unknown'})`);
+    }
+  });
 
   try {
-    // 直接访问 console/personal 页面
-    console.log('anyrouter: navigating to /console/personal...');
+    // 直接访问 console/personal
+    console.log('anyrouter: navigating to /console/personal via proxy...');
     await page.goto(BASE + '/console/personal', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(3000);
     console.log('anyrouter URL:', page.url());
@@ -63,17 +70,15 @@ async function run(config = {}) {
     console.log('anyrouter: logged in status:', loggedIn);
 
     if (!loggedIn) {
-      // 尝试 /oauth/github 端点
+      // 尝试 /oauth/github
       console.log('anyrouter: trying /oauth/github...');
       await page.goto(BASE + '/oauth/github', { waitUntil: 'domcontentloaded', timeout: 30000 });
       await sleep(8000);
-      const oauthUrl = page.url();
-      console.log('anyrouter oauth URL:', oauthUrl);
+      console.log('anyrouter oauth URL:', page.url());
 
-      if (oauthUrl.includes('github.com')) {
+      if (page.url().includes('github.com')) {
         console.log('anyrouter: on GitHub page');
-        if (oauthUrl.includes('/login')) {
-          console.log('anyrouter: on GitHub login page');
+        if (page.url().includes('/login')) {
           await page.locator('input[name="login"]').first().fill(GH_USER);
           await page.locator('input[name="password"]').first().fill(GH_PASS);
           await page.locator('input[type="submit"]').first().click();
@@ -115,7 +120,6 @@ async function run(config = {}) {
           console.log('anyrouter: after click, URL:', page.url());
 
           if (page.url().includes('github.com')) {
-            console.log('anyrouter: on GitHub page');
             if (page.url().includes('/login')) {
               await page.locator('input[name="login"]').first().fill(GH_USER);
               await page.locator('input[name="password"]').first().fill(GH_PASS);
@@ -128,16 +132,6 @@ async function run(config = {}) {
                   if (await authBtn.count() > 0) await authBtn.click({ force: true });
                 } catch(e) {}
                 await sleep(5000);
-                loggedIn = !page.url().includes('login');
-              }
-            } else {
-              try {
-                await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-                const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-                if (await authBtn.count() > 0) await authBtn.click({ force: true });
-                await sleep(5000);
-                loggedIn = !page.url().includes('login');
-              } catch(e) {
                 loggedIn = !page.url().includes('login');
               }
             }
