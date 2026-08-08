@@ -41,8 +41,9 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  const saved = await loadCookies();
-  if (saved.agentrouter && saved.agentrouter.length > 0) await ctx.addCookies(saved.agentrouter);
+  // 清除旧 cookies，强制重新登录
+  console.log('agentrouter: clearing old cookies...');
+  await ctx.clearCookies();
 
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
@@ -61,17 +62,19 @@ async function run(config = {}) {
       console.log('agentrouter: still blocked by verification');
     }
 
-    const hasGitHubBtn = await page.evaluate(() => !!document.querySelector('[aria-label="github_logo"]'));
+    // 检查是否有 GitHub OAuth 按钮
+    const hasGitHubBtn = await page.evaluate(() => {
+      const svg = document.querySelector('[aria-label="github_logo"]');
+      return !!svg;
+    });
     console.log('agentrouter: has GitHub button:', hasGitHubBtn);
 
+    let loggedIn = false;
+
     if (hasGitHubBtn) {
-      await page.evaluate(() => {
-        const svg = document.querySelector('[aria-label="github_logo"]');
-        if (svg) {
-          const btn = svg.closest('button') || svg.parentElement?.closest('button');
-          if (btn) btn.click();
-        }
-      });
+      console.log('agentrouter: clicking GitHub OAuth button...');
+      // 使用 page.click 而不是 evaluate 来确保点击事件正确触发
+      await page.locator('[aria-label="github_logo"]').first().click();
       await sleep(3000);
       console.log('agentrouter after click, URL:', page.url());
 
@@ -102,10 +105,18 @@ async function run(config = {}) {
 
       await sleep(5000);
       console.log('agentrouter: final URL:', page.url());
+      loggedIn = !page.url().includes('login');
+    } else {
+      console.log('agentrouter: no GitHub button found, checking if already logged in...');
+      // 尝试直接使用现有 cookies 访问控制台
+      await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(3000);
+      loggedIn = !page.url().includes('login');
+      console.log('agentrouter: logged in status:', loggedIn, 'URL:', page.url());
     }
 
     let checkinSuccess = false;
-    if (!page.url().includes('login')) {
+    if (loggedIn) {
       console.log('agentrouter: logged in!');
       try {
         const cookies = await ctx.cookies(BASE);

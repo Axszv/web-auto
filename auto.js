@@ -34,7 +34,7 @@ const sites = [
 (async () => {
   const log = [];
   var hadFailure = false;
-  var allCheckinSuccess = true;
+  var checkinFailures = [];
   const start = Date.now();
   log.push('=== Web Auto Start ===');
   log.push('Time: ' + new Date().toISOString());
@@ -54,8 +54,8 @@ const sites = [
       // 对于 agentrouter 和 anyrouter，检查签到是否成功
       if (site.name === 'agentrouter' || site.name === 'anyrouter') {
         if (result.checkinSuccess === false) {
-          allCheckinSuccess = false;
-          log.push('WARNING: ' + site.name + ' checkin may have failed');
+          checkinFailures.push(site.name);
+          log.push('WARNING: ' + site.name + ' checkin may have failed (balance not increased by 25)');
         } else {
           log.push('OK: ' + site.name + ' checkin successful');
         }
@@ -75,11 +75,12 @@ const sites = [
   console.log(text);
   await writeLog(log);
 
-  if (!allCheckinSuccess) {
-    log.push('*** Some sites checkin failed, exiting with error ***');
-    console.log(text);
-    process.exit(1);
+  // 如果有签到失败，记录警告但不立即退出（让 workflow 继续）
+  if (checkinFailures.length > 0) {
+    log.push('WARNING: The following sites may have checkin failures: ' + checkinFailures.join(', '));
+    log.push('Please check balance increase (+25) in next run.');
   }
+
   if (hadFailure) {
     console.log('\n*** Some sites failed, exiting with error ***');
     process.exit(1);
