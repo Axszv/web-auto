@@ -1,4 +1,4 @@
-// sites/agentrouter.js — 使用 sing-box 代理 + Chromium，保留 session cookie
+// sites/agentrouter.js — 使用 sing-box 代理 + Chromium，通过 page.evaluate 调用 API
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -40,7 +40,7 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  // 加载现有 cookies（不清除，保留 session）
+  // 加载现有 cookies
   const existingCookies = await loadCookies();
   if (existingCookies.agentrouter && existingCookies.agentrouter.length > 0) {
     await ctx.addCookies(existingCookies.agentrouter);
@@ -50,14 +50,8 @@ async function run(config = {}) {
   const page = await ctx.newPage();
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
-  page.on('response', async resp => {
-    if (resp.url().includes('api/')) {
-      console.log(`[API] ${resp.url()} -> ${resp.status()} (${resp.headers()['content-type'] || 'unknown'})`);
-    }
-  });
 
   try {
-    // 先尝试访问 console（保留 session cookie）
     console.log('agentrouter: navigating to /console via proxy...');
     await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 90000 });
     await sleep(5000);
@@ -93,7 +87,6 @@ async function run(config = {}) {
       }
 
       if (!loggedIn) {
-        // 尝试找 GitHub 按钮
         let githubBtn = page.locator('[aria-label="github_logo"]');
         if (await githubBtn.count() === 0) githubBtn = page.locator('text=Continue with GitHub');
         if (await githubBtn.count() === 0) githubBtn = page.locator('.semi-icon-github_logo');
@@ -150,61 +143,60 @@ async function run(config = {}) {
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
-    const cookies = await ctx.cookies(BASE);
-    const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
-    console.log('agentrouter: cookie count:', cookies.length);
-    console.log('agentrouter: cookie names:', cookies.map(c => c.name).join(', '));
+    // 使用 page.evaluate + fetch 来调用 API（复用浏览器 session）
+    const result = await page.evaluate(async () => {
+      const results = {};
+
+      // Get before balance
+      try {
+        const resp1 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
+        const text1 = await resp1.text();
+        try { results.before = JSON.parse(text1); }
+        catch(e) { results.beforeText = text1.substring(0, 300); }
+        results.beforeStatus = resp1.status;
+      } catch(e) { results.beforeError = e.message; }
+
+      // Checkin
+      try {
+        const resp2 = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
+        const text2 = await resp2.text();
+        try { results.checkin = JSON.parse(text2); }
+        catch(e) { results.checkinText = text2.substring(0, 300); }
+        results.checkinStatus = resp2.status;
+      } catch(e) { results.checkinError = e.message; }
+
+      // Get after balance
+      try {
+        const resp3 = await fetch('/api/user/info', { method: 'GET', credentials: 'include' });
+        const text3 = await resp3.text();
+        try { results.after = JSON.parse(text3); }
+        catch(e) { results.afterText = text3.substring(0, 300); }
+        results.afterStatus = resp3.status;
+      } catch(e) { results.afterError = e.message; }
+
+      return results;
+    });
+
+    console.log('agentrouter: API result:', JSON.stringify(result).substring(0, 800));
 
     let beforeBalance = null;
-    try {
-      const infoResp = await page.request.get(BASE + '/api/user/info', {
-        headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
-      });
-      console.log('agentrouter: info status:', infoResp.status());
-      const text = await infoResp.text();
-      if (infoResp.headers()['content-type']?.includes('json')) {
-        const info = JSON.parse(text);
-        beforeBalance = info.data?.balance || info.data?.credits || info.balance || info.credits;
-        console.log('agentrouter: balance before:', beforeBalance);
-      } else {
-        console.log('agentrouter: info response (not JSON):', text.substring(0, 200));
-      }
-    } catch(e) { console.log('agentrouter: failed to get before balance:', e.message); }
-
-    let checkinResult = null;
-    try {
-      const checkinResp = await page.request.post(BASE + '/api/user/checkin', {
-        headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
-      });
-      console.log('agentrouter: checkin status:', checkinResp.status());
-      const text = await checkinResp.text();
-      if (checkinResp.headers()['content-type']?.includes('json')) {
-        checkinResult = JSON.parse(text);
-        console.log('agentrouter: checkin result:', JSON.stringify(checkinResult));
-      } else {
-        console.log('agentrouter: checkin response (not JSON):', text.substring(0, 200));
-      }
-    } catch(e) { console.log('agentrouter: checkin error:', e.message); }
-
     let afterBalance = null;
-    try {
-      const infoResp2 = await page.request.get(BASE + '/api/user/info', {
-        headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
-      });
-      console.log('agentrouter: info2 status:', infoResp2.status());
-      const text2 = await infoResp2.text();
-      if (infoResp2.headers()['content-type']?.includes('json')) {
-        const info2 = JSON.parse(text2);
-        afterBalance = info2.data?.balance || info2.data?.credits || info2.balance || info2.credits;
-        console.log('agentrouter: balance after:', afterBalance);
-      } else {
-        console.log('agentrouter: info2 response (not JSON):', text2.substring(0, 200));
-      }
-    } catch(e) { console.log('agentrouter: failed to get after balance:', e.message); }
 
-    if (checkinResult) {
-      if (checkinResult.code === 200 || checkinResult.success === true ||
-          (checkinResult.message && checkinResult.message.includes('成功'))) {
+    if (result.before) {
+      beforeBalance = result.before.data?.balance || result.before.data?.credits ||
+                      result.before.balance || result.before.credits;
+    }
+    console.log('agentrouter: balance before:', beforeBalance);
+
+    if (result.after) {
+      afterBalance = result.after.data?.balance || result.after.data?.credits ||
+                     result.after.balance || result.after.credits;
+    }
+    console.log('agentrouter: balance after:', afterBalance);
+
+    if (result.checkin) {
+      if (result.checkin.code === 200 || result.checkin.success === true ||
+          (result.checkin.message && result.checkin.message.includes('成功'))) {
         checkinSuccess = true;
         console.log('agentrouter: checkin successful');
       }
@@ -216,6 +208,12 @@ async function doCheckin(page, ctx, BASE) {
         checkinSuccess = true;
         console.log('agentrouter: balance increased by', diff, '-> success!');
       }
+    }
+
+    if (!checkinSuccess) {
+      console.log('agentrouter: before status:', result.beforeStatus, 'checkin status:', result.checkinStatus, 'after status:', result.afterStatus);
+      console.log('agentrouter: before text:', (result.beforeText || '').substring(0, 200));
+      console.log('agentrouter: checkin text:', (result.checkinText || '').substring(0, 200));
     }
   } catch(e) { console.log('agentrouter checkin error:', e.message); }
 
