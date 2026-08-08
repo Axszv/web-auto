@@ -1,4 +1,4 @@
-// sites/anyrouter.js — 使用 sing-box 代理 + Chromium，尝试 OAuth
+// sites/anyrouter.js — 使用 sing-box 代理 + Chromium，获取 OAuth state
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -55,7 +55,15 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
   page.on('response', async resp => {
     if (resp.url().includes('api/')) {
-      console.log(`[API] ${resp.url()} -> ${resp.status()} (${resp.headers()['content-type'] || 'unknown'})`);
+      const status = resp.status();
+      const contentType = resp.headers()['content-type'] || '';
+      console.log(`[API] ${resp.url()} -> ${status} (${contentType.substring(0, 50)})`);
+      if (status === 200 && contentType.includes('json')) {
+        try {
+          const body = await resp.text();
+          console.log(`[API Response] ${body.substring(0, 300)}`);
+        } catch(e) {}
+      }
     }
   });
 
@@ -70,11 +78,25 @@ async function run(config = {}) {
     console.log('anyrouter: logged in status:', loggedIn);
 
     if (!loggedIn) {
-      // 尝试访问 OAuth 页面
-      console.log('anyrouter: trying /oauth/github...');
-      await page.goto(BASE + '/oauth/github', { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(5000);
-      console.log('anyrouter oauth URL:', page.url());
+      // 获取 OAuth state
+      console.log('anyrouter: getting OAuth state...');
+      const oauthState = await page.evaluate(async () => {
+        try {
+          const resp = await fetch('/api/oauth/github', { method: 'GET', credentials: 'include' });
+          if (resp.ok) {
+            const data = await resp.json();
+            return data;
+          }
+        } catch(e) {}
+        return null;
+      });
+      console.log('anyrouter: OAuth state:', JSON.stringify(oauthState));
+
+      if (oauthState && oauthState.url) {
+        console.log('anyrouter: navigating to OAuth URL:', oauthState.url);
+        await page.goto(oauthState.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await sleep(3000);
+      }
 
       if (page.url().includes('github.com')) {
         console.log('anyrouter: on GitHub page');
