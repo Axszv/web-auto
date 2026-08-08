@@ -14,7 +14,7 @@
     {
       "type": "vless",
       "tag": "vless-out",
-      "server": "proxyip.us.cmliussss.net",
+      "server": "REDACTED-HOST",
       "server_port": 443,
       "uuid": "REDACTED",
       "tls": {
