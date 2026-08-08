@@ -1,4 +1,4 @@
-// sites/agentrouter.js — 直接访问（无需代理）
+// sites/agentrouter.js — 使用 sing-box VLESS 代理绕过 Cloudflare
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,9 +20,13 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://agentrouter.org';
 
+  // 使用 sing-box 本地 HTTP 代理 (port 1080)
+  const PROXY = { server: 'http://127.0.0.1:1080' };
+
   const browser = await firefox.launch({
     headless: false,
     args: ['--no-sandbox'],
+    proxy: PROXY
   });
 
   const ctx = await browser.newContext({
@@ -45,10 +49,13 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('agentrouter: navigating...');
-    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 60000 });
+    console.log('agentrouter: navigating via proxy...');
+    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
-    console.log('agentrouter main page URL:', page.url());
+    console.log('agentrouter URL:', page.url());
+
+    const pageText = await page.evaluate(() => document.body.innerText);
+    console.log('agentrouter page text:', pageText.substring(0, 400));
 
     let loggedIn = false;
 
@@ -61,26 +68,7 @@ async function run(config = {}) {
       githubBtn = page.locator('.semi-icon-github_logo');
     }
 
-    console.log('agentrouter main page has GitHub button:', await githubBtn.count() > 0);
-
-    if (await githubBtn.count() === 0) {
-      console.log('agentrouter: clicking Sign in button...');
-      const signInBtn = page.locator('text=Sign in, text=Log In').first();
-      if (await signInBtn.count() > 0) {
-        await signInBtn.click();
-        await sleep(3000);
-        console.log('agentrouter after Sign in, URL:', page.url());
-      }
-
-      githubBtn = page.locator('[aria-label="github_logo"]');
-      if (await githubBtn.count() === 0) {
-        githubBtn = page.locator('text=Continue with GitHub');
-      }
-      if (await githubBtn.count() === 0) {
-        githubBtn = page.locator('.semi-icon-github_logo');
-      }
-      console.log('agentrouter login page has GitHub button:', await githubBtn.count() > 0);
-    }
+    console.log('agentrouter: found GitHub button:', await githubBtn.count());
 
     if (await githubBtn.count() > 0) {
       console.log('agentrouter: clicking GitHub OAuth button...');
@@ -123,8 +111,8 @@ async function run(config = {}) {
         console.log('agentrouter: click did not navigate to GitHub');
       }
     } else {
-      console.log('agentrouter: no GitHub button found');
-      await page.goto(BASE + '/console', { waitUntil: 'networkidle', timeout: 30000 });
+      console.log('agentrouter: no GitHub button found, trying console page...');
+      await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
       await sleep(3000);
       loggedIn = !page.url().includes('login');
       console.log('agentrouter: logged in status:', loggedIn);
@@ -137,7 +125,6 @@ async function run(config = {}) {
         const cookies = await ctx.cookies(BASE);
         const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
 
-        // 获取签到前余额
         let beforeBalance = null;
         try {
           const infoResp = await page.request.get(BASE + '/api/user/info', {
@@ -150,7 +137,6 @@ async function run(config = {}) {
           }
         } catch(e) { console.log('agentrouter: failed to get before balance'); }
 
-        // 签到
         const resp = await page.request.post(BASE + '/api/user/checkin', {
           headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
         });
@@ -167,7 +153,6 @@ async function run(config = {}) {
           }
         }
 
-        // 获取签到后余额
         let afterBalance = null;
         try {
           const infoResp2 = await page.request.get(BASE + '/api/user/info', {
@@ -180,7 +165,6 @@ async function run(config = {}) {
           }
         } catch(e) { console.log('agentrouter: failed to get after balance'); }
 
-        // 判断签到是否成功
         if (checkinResult) {
           if (checkinResult.code === 200 || checkinResult.success === true) {
             checkinSuccess = true;

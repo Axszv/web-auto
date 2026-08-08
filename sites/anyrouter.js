@@ -1,4 +1,4 @@
-// sites/anyrouter.js — 直接访问（无需代理）
+// sites/anyrouter.js — 使用 sing-box VLESS 代理绕过 Cloudflare
 const { firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -20,9 +20,13 @@ async function run(config = {}) {
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
   const BASE = 'https://anyrouter.top';
 
+  // 使用 sing-box 本地 HTTP 代理 (port 1080)
+  const PROXY = { server: 'http://127.0.0.1:1080' };
+
   const browser = await firefox.launch({
     headless: false,
     args: ['--no-sandbox'],
+    proxy: PROXY
   });
 
   const ctx = await browser.newContext({
@@ -45,8 +49,8 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
 
   try {
-    console.log('anyrouter: starting...');
-    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 60000 });
+    console.log('anyrouter: starting via proxy...');
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(8000);
     console.log('anyrouter after main:', page.url());
 
@@ -55,7 +59,7 @@ async function run(config = {}) {
 
     // 直接访问 login 页面
     console.log('anyrouter: navigating to /login...');
-    await page.goto(BASE + '/login', { waitUntil: 'networkidle', timeout: 60000 });
+    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(5000);
     console.log('anyrouter login page URL:', page.url());
 
@@ -112,7 +116,7 @@ async function run(config = {}) {
       }
     } else {
       console.log('anyrouter: no GitHub button found');
-      await page.goto(BASE + '/console', { waitUntil: 'networkidle', timeout: 60000 });
+      await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 60000 });
       await sleep(5000);
       loggedIn = !page.url().includes('login');
       console.log('anyrouter: logged in status:', loggedIn);
@@ -124,7 +128,6 @@ async function run(config = {}) {
         const cookies = await ctx.cookies(BASE);
         const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
 
-        // 获取签到前余额
         let beforeBalance = null;
         try {
           const infoResp = await page.request.get(BASE + '/api/user/info', {
@@ -137,14 +140,12 @@ async function run(config = {}) {
           }
         } catch(e) { console.log('anyrouter: failed to get before balance'); }
 
-        // 签到
         const cr = await page.evaluate(async () => {
           try { const r = await fetch('/api/user/checkin', { method: 'POST' }); return await r.json(); }
           catch(e) { return { error: e.message }; }
         });
         console.log('anyrouter checkin:', JSON.stringify(cr));
 
-        // 获取签到后余额
         let afterBalance = null;
         try {
           const infoResp2 = await page.request.get(BASE + '/api/user/info', {
@@ -157,7 +158,6 @@ async function run(config = {}) {
           }
         } catch(e) { console.log('anyrouter: failed to get after balance'); }
 
-        // 判断签到是否成功
         if (cr && (cr.code === 200 || cr.success === true || cr.message?.includes('成功'))) {
           checkinSuccess = true;
           console.log('anyrouter: checkin successful (API returned success)');
