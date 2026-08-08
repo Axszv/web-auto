@@ -1,4 +1,4 @@
-// sites/anyrouter.js — 使用 sing-box 代理 + Chromium，获取 OAuth state
+// sites/anyrouter.js — 使用 sing-box 代理 + Chromium，保留 session cookie
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -40,14 +40,11 @@ async function run(config = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
-  // 恢复 session cookie
+  // 加载现有 cookies（不清除，保留 session）
   const existingCookies = await loadCookies();
-  if (existingCookies.anyrouter) {
-    const sessionCookies = existingCookies.anyrouter.filter(c => c.name === 'session');
-    if (sessionCookies.length > 0) {
-      await ctx.addCookies(sessionCookies);
-      console.log('anyrouter: restored session cookie');
-    }
+  if (existingCookies.anyrouter && existingCookies.anyrouter.length > 0) {
+    await ctx.addCookies(existingCookies.anyrouter);
+    console.log('anyrouter: restored existing cookies');
   }
 
   const page = await ctx.newPage();
@@ -55,21 +52,13 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
   page.on('response', async resp => {
     if (resp.url().includes('api/')) {
-      const status = resp.status();
-      const contentType = resp.headers()['content-type'] || '';
-      console.log(`[API] ${resp.url()} -> ${status} (${contentType.substring(0, 50)})`);
-      if (status === 200 && contentType.includes('json')) {
-        try {
-          const body = await resp.text();
-          console.log(`[API Response] ${body.substring(0, 300)}`);
-        } catch(e) {}
-      }
+      console.log(`[API] ${resp.url()} -> ${resp.status()} (${resp.headers()['content-type'] || 'unknown'})`);
     }
   });
 
   try {
     // 先尝试访问 console
-    console.log('anyrouter: navigating to /console...');
+    console.log('anyrouter: navigating to /console via proxy...');
     await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(3000);
     console.log('anyrouter URL:', page.url());
@@ -78,25 +67,11 @@ async function run(config = {}) {
     console.log('anyrouter: logged in status:', loggedIn);
 
     if (!loggedIn) {
-      // 获取 OAuth state
-      console.log('anyrouter: getting OAuth state...');
-      const oauthState = await page.evaluate(async () => {
-        try {
-          const resp = await fetch('/api/oauth/github', { method: 'GET', credentials: 'include' });
-          if (resp.ok) {
-            const data = await resp.json();
-            return data;
-          }
-        } catch(e) {}
-        return null;
-      });
-      console.log('anyrouter: OAuth state:', JSON.stringify(oauthState));
-
-      if (oauthState && oauthState.url) {
-        console.log('anyrouter: navigating to OAuth URL:', oauthState.url);
-        await page.goto(oauthState.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await sleep(3000);
-      }
+      // 尝试 OAuth
+      console.log('anyrouter: trying /oauth/github...');
+      await page.goto(BASE + '/oauth/github', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(5000);
+      console.log('anyrouter oauth URL:', page.url());
 
       if (page.url().includes('github.com')) {
         console.log('anyrouter: on GitHub page');
