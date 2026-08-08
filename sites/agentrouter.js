@@ -104,16 +104,69 @@ async function run(config = {}) {
       console.log('agentrouter: final URL:', page.url());
     }
 
+    let checkinSuccess = false;
     if (!page.url().includes('login')) {
       console.log('agentrouter: logged in!');
       try {
         const cookies = await ctx.cookies(BASE);
         const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
+
+        // 先获取签到前余额
+        let beforeBalance = null;
+        try {
+          const infoResp = await page.request.get(BASE + '/api/user/info', {
+            headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
+          });
+          if (infoResp.ok()) {
+            const info = await infoResp.json();
+            beforeBalance = info.data?.balance || info.data?.credits || info.balance || info.credits;
+            console.log('agentrouter: balance before checkin:', beforeBalance);
+          }
+        } catch(e) {}
+
+        // 签到
         const resp = await page.request.post(BASE + '/api/user/checkin', {
           headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
         });
         console.log('agentrouter checkin status:', resp.status());
-      } catch(e) {}
+
+        let checkinResult = null;
+        if (resp.ok()) {
+          checkinResult = await resp.json();
+          console.log('agentrouter checkin result:', JSON.stringify(checkinResult));
+        }
+
+        // 获取签到后余额
+        let afterBalance = null;
+        try {
+          const infoResp2 = await page.request.get(BASE + '/api/user/info', {
+            headers: { 'Cookie': cookieStr, 'Accept': 'application/json' }
+          });
+          if (infoResp2.ok()) {
+            const info2 = await infoResp2.json();
+            afterBalance = info2.data?.balance || info2.data?.credits || info2.balance || info2.credits;
+            console.log('agentrouter: balance after checkin:', afterBalance);
+          }
+        } catch(e) {}
+
+        // 判断签到是否成功：余额增加或返回成功状态
+        if (checkinResult) {
+          if (checkinResult.code === 200 || checkinResult.success === true) {
+            checkinSuccess = true;
+            console.log('agentrouter: checkin successful (API returned success)');
+          }
+        }
+        if (beforeBalance !== null && afterBalance !== null) {
+          const diff = afterBalance - beforeBalance;
+          console.log('agentrouter: balance change:', diff);
+          if (diff >= 25) {
+            checkinSuccess = true;
+            console.log('agentrouter: balance increased by', diff, '-> checkin successful!');
+          }
+        }
+      } catch(e) {
+        console.log('agentrouter checkin error:', e.message);
+      }
     } else {
       console.log('agentrouter: still on login page');
     }
@@ -127,8 +180,8 @@ async function run(config = {}) {
     }
 
     await browser.close();
-    console.log('agentrouter done');
-    return { success: true };
+    console.log('agentrouter done, checkinSuccess:', checkinSuccess);
+    return { success: true, checkinSuccess };
   } catch (e) {
     console.error('agentrouter error:', e.message);
     await browser.close();

@@ -1,4 +1,4 @@
-﻿// sites/gogocs.js — Uses built-in Chromium (works on all platforms)
+// sites/gogocs.js — 无需代理，直接访问
 const crypto = require('crypto');
 const { chromium } = require('playwright');
 const fs = require('fs');

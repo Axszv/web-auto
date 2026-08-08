@@ -34,6 +34,7 @@ const sites = [
 (async () => {
   const log = [];
   var hadFailure = false;
+  var allCheckinSuccess = true;
   const start = Date.now();
   log.push('=== Web Auto Start ===');
   log.push('Time: ' + new Date().toISOString());
@@ -49,10 +50,21 @@ const sites = [
     try {
       const result = await site.mod.run(cfg ? cfg.config : {});
       log.push('Result: ' + JSON.stringify(result));
-      if (result.success === false && site.name !== "anyrouter") hadFailure = true;
+
+      // 对于 agentrouter 和 anyrouter，检查签到是否成功
+      if (site.name === 'agentrouter' || site.name === 'anyrouter') {
+        if (result.checkinSuccess === false) {
+          allCheckinSuccess = false;
+          log.push('WARNING: ' + site.name + ' checkin may have failed');
+        } else {
+          log.push('OK: ' + site.name + ' checkin successful');
+        }
+      }
+
+      if (result.success === false) hadFailure = true;
     } catch (e) {
       log.push('Error: ' + e.message);
-      if (site.name !== "anyrouter") hadFailure = true;
+      hadFailure = true;
     }
     log.push('');
     await sleep(1500);
@@ -62,6 +74,12 @@ const sites = [
   const text = log.join('\n');
   console.log(text);
   await writeLog(log);
+
+  if (!allCheckinSuccess) {
+    log.push('*** Some sites checkin failed, exiting with error ***');
+    console.log(text);
+    process.exit(1);
+  }
   if (hadFailure) {
     console.log('\n*** Some sites failed, exiting with error ***');
     process.exit(1);
