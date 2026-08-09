@@ -25,14 +25,37 @@ async function run(config = {}) {
   console.log('anyrouter: launching chromium via proxy...');
   const browser = await chromium.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
+    args: [
+      '--no-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage',
+      '--disable-extensions',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process'
+    ],
     proxy: PROXY
   });
 
   const ctx = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    viewport: { width: 1280, height: 800 },
-    locale: 'en-US'
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    viewport: { width: 1920, height: 1080 },
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+    permissions: ['geolocation'],
+    deviceScaleFactor: 1,
+    hasTouch: false,
+    isMobile: false
+  });
+
+  // 注入脚本隐藏 automation 特征
+  await ctx.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    window.chrome = { runtime: {} };
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    window.navigator.connection = { effectiveType: '4g', rtt: 50, downlink: 10 };
   });
 
   const existingCookies = await loadCookies();
@@ -89,12 +112,24 @@ async function run(config = {}) {
             await sleep(3000);
           }
 
-          // 如果在 /session 页面，导航回 authorize
+          // 如果在 /session 页面，等待并重定向到 authorize
           if (page.url().includes('github.com/session')) {
-            console.log('anyrouter: on session page, re-navigating...');
-            await sleep(2000);
-            await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            console.log('anyrouter: on GitHub session page, waiting...');
             await sleep(3000);
+            for (let i = 0; i < 10; i++) {
+              await sleep(1000);
+              const url = page.url();
+              if (!url.includes('github.com/session')) {
+                console.log('anyrouter: redirected from session:', url);
+                break;
+              }
+            }
+            if (page.url().includes('github.com/session')) {
+              console.log('anyrouter: navigating back to authorize...');
+              await sleep(2000);
+              await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await sleep(3000);
+            }
           }
 
           // 如果到了 authorize 页面，点击授权
