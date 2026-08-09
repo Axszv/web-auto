@@ -120,12 +120,14 @@ async function run(config = {}) {
               const text = await btn.textContent();
               const classes = await btn.getAttribute('class') || '';
               const type = await btn.getAttribute('type') || '';
-              // 跳过关闭按钮、第三方登录按钮
+              // 跳过关闭按钮、第三方登录按钮、passkey 按钮
               if (classes.includes('flash-close') || classes.includes('js-flash-close')) continue;
               if (text && (text.includes('Google') || text.includes('Facebook') || text.includes('Apple'))) continue;
               if (text && text.includes('Continue with')) continue;
-              // 查找包含 Authorize 或类似文本的按钮
-              if (text && (text.includes('Authorize') || text.includes('授权') || text.includes('Allow') || text.trim().length > 3)) {
+              if (text && text.includes('passkey')) continue;
+              if (text && text.includes('Sign in with')) continue;
+              // 查找包含 Authorize 或 Continue 文本的按钮
+              if (text && (text.includes('Authorize') || text.includes('授权') || text.includes('Allow') || text.includes('Continue'))) {
                 console.log(`anyrouter: clicking button: "${text?.substring(0, 50)}"`);
                 await btn.click({ timeout: 5000 });
                 clicked = true;
