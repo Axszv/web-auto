@@ -117,6 +117,13 @@ async function run(config = {}) {
         const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
 
         try {
+          // 先尝试加载 GitHub 持久化 cookies
+          const existingGitHubCookies = await loadCookies();
+          if (existingGitHubCookies.github && existingGitHubCookies.github.length > 0) {
+            await ctx.addCookies(existingGitHubCookies.github);
+            console.log('anyrouter: restored GitHub session cookies');
+          }
+
           await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
           await sleep(2000);
 
@@ -151,24 +158,13 @@ async function run(config = {}) {
             }
           }
 
-          // 如果在 /u2f/login_fragment 页面，等待并重定向到 authorize
+          // 如果在 /u2f/login_fragment 页面，显示提示并返回
           if (page.url().includes('github.com/u2f')) {
-            console.log('anyrouter: on GitHub U2F page, waiting...');
-            await sleep(3000);
-            for (let i = 0; i < 10; i++) {
-              await sleep(1000);
-              const url = page.url();
-              if (!url.includes('github.com/u2f')) {
-                console.log('anyrouter: redirected from U2F:', url);
-                break;
-              }
-            }
-            if (page.url().includes('github.com/u2f')) {
-              console.log('anyrouter: navigating back to authorize after U2F...');
-              await sleep(2000);
-              await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-              await sleep(3000);
-            }
+            console.log('anyrouter: on GitHub U2F page - needs physical device interaction');
+            console.log('anyrouter: U2F login cannot be automated, please use a persistent GitHub session');
+            // 尝试保存 GitHub cookies for future use
+            await saveGitHubCookies(ctx);
+            return { success: true, checkinSuccess: false, needsU2F: true };
           }
 
           // 如果到了 authorize 页面，点击授权
@@ -303,6 +299,20 @@ async function saveCtxCookies(ctx, BASE) {
     all.anyrouter = cookies;
     await saveCookies(all);
     console.log('anyrouter cookies saved:', cookies.length);
+  }
+}
+
+async function saveGitHubCookies(ctx) {
+  try {
+    const cookies = await ctx.cookies('https://github.com');
+    if (cookies.length > 0) {
+      const all = await loadCookies();
+      all.github = cookies;
+      await saveCookies(all);
+      console.log('GitHub cookies saved:', cookies.length, '(for persistent sessions)');
+    }
+  } catch(e) {
+    console.log('Failed to save GitHub cookies:', e.message);
   }
 }
 
