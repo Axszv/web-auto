@@ -106,21 +106,18 @@ async function run(config = {}) {
             // 使用 JavaScript 点击
             try {
               await page.evaluate(() => {
-                const selectors = [
-                  'input[value="Authorize"]',
-                  'input[type="submit"][value*="Authorize"]',
-                  'button:has-text("Authorize")',
-                  'button[type="submit"]'
-                ];
-                for (const sel of selectors) {
-                  const btn = document.querySelector(sel);
-                  if (btn) {
+                // 查找包含 Authorize 文本的按钮
+                const allBtns = document.querySelectorAll('input[type="submit"], button');
+                for (const btn of allBtns) {
+                  const text = btn.textContent || btn.value;
+                  if (text && text.includes('Authorize')) {
                     btn.click();
                     return;
                   }
                 }
-                const allBtns = document.querySelectorAll('input[type="submit"], button[type="submit"]');
-                if (allBtns.length > 0) allBtns[0].click();
+                // 如果没有找到，点击第一个 submit 按钮
+                const firstSubmit = document.querySelector('input[type="submit"]');
+                if (firstSubmit) firstSubmit.click();
               });
               console.log('anyrouter: clicked Authorize via JavaScript');
             } catch(e) {
