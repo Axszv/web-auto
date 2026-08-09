@@ -67,30 +67,65 @@ async function run(config = {}) {
       console.log('agentrouter after GitHub login:', page.url());
     }
 
-    // 如果在 /session 页面，尝试点击页面上的按钮
+    // 如果在 /session 页面，找到并点击授权按钮
     if (page.url().includes('github.com/session')) {
-      console.log('agentrouter: on GitHub session page, trying to proceed...');
+      console.log('agentrouter: on GitHub session page, looking for authorize button...');
       await sleep(3000);
-      // 尝试点击页面上的非第三方登录按钮
-      const buttons = await page.locator('button:not([disabled])').all();
-      console.log(`agentrouter: found ${buttons.length} buttons`);
-      for (const btn of buttons) {
-        const text = await btn.textContent().catch(() => '');
-        const classes = await btn.getAttribute('class').catch(() => '');
-        console.log(`agentrouter: button text="${text?.substring(0, 30)}" classes="${classes.substring(0, 50)}"`);
-        // 跳过第三方登录按钮
-        if (text && (text.includes('Google') || text.includes('Facebook') || text.includes('Apple'))) {
-          continue;
+      // GitHub /session 页面有明确的授权按钮
+      // 尝试多种选择器
+      const selectors = [
+        'input[value="Authorize"]',
+        'input[value*="Authorize"]',
+        'button:has-text("Authorize")',
+        'button:has-text("授权")',
+        'input[type="submit"][value*="Authorize"]',
+      ];
+      let clicked = false;
+      for (const selector of selectors) {
+        const btn = page.locator(selector).first();
+        const count = await btn.count();
+        if (count > 0) {
+          const text = await btn.textContent().catch(() => '') || await btn.inputValue().catch(() => '');
+          console.log(`agentrouter: found button "${text}" with selector ${selector}`);
+          try {
+            await btn.click({ timeout: 5000 });
+            clicked = true;
+            console.log('agentrouter: clicked authorize button');
+            await sleep(5000);
+            break;
+          } catch(e) {
+            console.log('agentrouter: click failed:', e.message);
+          }
         }
-        // 尝试点击
-        try {
-          await btn.click({ timeout: 5000 });
-          console.log('agentrouter: clicked button');
-          await sleep(5000);
-          break;
-        } catch(e) {
-          console.log('agentrouter: click failed:', e.message);
+      }
+      // 如果没找到，尝试查找所有可见按钮并跳过特定类型
+      if (!clicked) {
+        const allButtons = await page.locator('button, input[type="submit"]').all();
+        console.log(`agentrouter: found ${allButtons.length} total buttons`);
+        for (const btn of allButtons) {
+          try {
+            const text = await btn.textContent();
+            const classes = await btn.getAttribute('class') || '';
+            const type = await btn.getAttribute('type') || '';
+            // 跳过关闭按钮、第三方登录按钮
+            if (classes.includes('flash-close') || classes.includes('js-flash-close')) continue;
+            if (text && (text.includes('Google') || text.includes('Facebook') || text.includes('Apple'))) continue;
+            if (text && text.includes('Continue with')) continue;
+            // 查找包含 Authorize 或类似文本的按钮
+            if (text && (text.includes('Authorize') || text.includes('授权') || text.includes('Allow') || text.trim().length > 3)) {
+              console.log(`agentrouter: clicking button: "${text?.substring(0, 50)}"`);
+              await btn.click({ timeout: 5000 });
+              clicked = true;
+              await sleep(5000);
+              break;
+            }
+          } catch(e) {
+            // 忽略错误
+          }
         }
+      }
+      if (!clicked) {
+        console.log('agentrouter: no authorize button found, checking URL...');
       }
       console.log('agentrouter after session handling:', page.url());
     }
