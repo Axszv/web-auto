@@ -23,8 +23,10 @@ async function run(config = {}) {
   const CLIENT_ID = 'Ov23liwqF4o0LXkK2yGg';
 
   console.log('anyrouter: launching chromium via proxy...');
+  const isHeadless = !process.env.DISPLAY;
+  console.log('anyrouter: headless mode:', isHeadless);
   const browser = await chromium.launch({
-    headless: true,
+    headless: isHeadless,
     args: [
       '--no-sandbox',
       '--disable-blink-features=AutomationControlled',
@@ -86,7 +88,7 @@ async function run(config = {}) {
 
     // 检查是否已登录 - 不仅检查 URL，还要检查 API 是否可访问
     let isLoggedIn = !currentUrl.includes('login') && !currentUrl.includes('github.com');
-    console.log('anyrouter logged in with cookies:', isLoggedIn);
+    console.log('anyrouter logged in with cookies:', isLoggedIn, 'URL:', currentUrl);
 
     // 验证 cookies 是否有效
     if (isLoggedIn) {
@@ -101,7 +103,7 @@ async function run(config = {}) {
       console.log('anyrouter API check:', JSON.stringify(apiCheck));
       if (apiCheck.status === 401 || !apiCheck.ok) {
         isLoggedIn = false;
-        console.log('anyrouter: cookies expired, will try OAuth');
+        console.log('anyrouter: cookies expired (status=' + apiCheck.status + '), will try OAuth');
       }
     }
 
@@ -149,6 +151,26 @@ async function run(config = {}) {
             }
           }
 
+          // 如果在 /u2f/login_fragment 页面，等待并重定向到 authorize
+          if (page.url().includes('github.com/u2f')) {
+            console.log('anyrouter: on GitHub U2F page, waiting...');
+            await sleep(3000);
+            for (let i = 0; i < 10; i++) {
+              await sleep(1000);
+              const url = page.url();
+              if (!url.includes('github.com/u2f')) {
+                console.log('anyrouter: redirected from U2F:', url);
+                break;
+              }
+            }
+            if (page.url().includes('github.com/u2f')) {
+              console.log('anyrouter: navigating back to authorize after U2F...');
+              await sleep(2000);
+              await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await sleep(3000);
+            }
+          }
+
           // 如果到了 authorize 页面，点击授权
           if (page.url().includes('authorize')) {
             console.log('anyrouter: on authorize page, clicking...');
@@ -180,7 +202,7 @@ async function run(config = {}) {
               }
             }
 
-            // 等待回调
+            // 等待回调 - 监测 URL 变化
             console.log('anyrouter: waiting for callback...');
             for (let i = 0; i < 30; i++) {
               await sleep(1000);
@@ -189,6 +211,15 @@ async function run(config = {}) {
                 console.log('anyrouter: callback detected!', url);
                 oauthSuccess = true;
                 isLoggedIn = true;
+                break;
+              }
+              // 如果回到登录页，重新登录
+              if (url.includes('github.com/login') && !url.includes('oauth')) {
+                console.log('anyrouter: redirected to login, re-authenticating...');
+                await page.locator('input[name="login"]').fill(GH_USER).catch(() => {});
+                await page.locator('input[name="password"]').fill(GH_PASS).catch(() => {});
+                await page.locator('input[type="submit"]').first().click().catch(() => {});
+                await sleep(3000);
                 break;
               }
             }
