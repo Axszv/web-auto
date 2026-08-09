@@ -80,69 +80,15 @@ async function run(config = {}) {
         console.log('anyrouter after GitHub login:', page.url());
       }
 
-      // 如果在 /session 页面，找到并点击授权按钮
+      // 如果在 /session 页面，直接导航回 OAuth authorize 页面
+      // 因为登录已成功，GitHub 应该会自动授权
       if (page.url().includes('github.com/session')) {
-        console.log('anyrouter: on GitHub session page, looking for authorize button...');
+        console.log('anyrouter: on GitHub session page, navigating back to OAuth authorize...');
+        await sleep(2000);
+        const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
+        await page.goto(oauthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await sleep(3000);
-        // GitHub /session 页面有明确的授权按钮
-        // 尝试多种选择器
-        const selectors = [
-          'input[value="Authorize"]',
-          'input[value*="Authorize"]',
-          'button:has-text("Authorize")',
-          'button:has-text("授权")',
-          'input[type="submit"][value*="Authorize"]',
-        ];
-        let clicked = false;
-        for (const selector of selectors) {
-          const btn = page.locator(selector).first();
-          const count = await btn.count();
-          if (count > 0) {
-            const text = await btn.textContent().catch(() => '') || await btn.inputValue().catch(() => '');
-            console.log(`anyrouter: found button "${text}" with selector ${selector}`);
-            try {
-              await btn.click({ timeout: 5000 });
-              clicked = true;
-              console.log('anyrouter: clicked authorize button');
-              await sleep(5000);
-              break;
-            } catch(e) {
-              console.log('anyrouter: click failed:', e.message);
-            }
-          }
-        }
-        // 如果没找到，尝试查找所有可见按钮并跳过特定类型
-        if (!clicked) {
-          const allButtons = await page.locator('button, input[type="submit"]').all();
-          console.log(`anyrouter: found ${allButtons.length} total buttons`);
-          for (const btn of allButtons) {
-            try {
-              const text = await btn.textContent();
-              const classes = await btn.getAttribute('class') || '';
-              const type = await btn.getAttribute('type') || '';
-              // 跳过关闭按钮、第三方登录按钮、passkey 按钮
-              if (classes.includes('flash-close') || classes.includes('js-flash-close')) continue;
-              if (text && (text.includes('Google') || text.includes('Facebook') || text.includes('Apple'))) continue;
-              if (text && text.includes('Continue with')) continue;
-              if (text && text.includes('passkey')) continue;
-              if (text && text.includes('Sign in with')) continue;
-              // 查找包含 Authorize 或 Continue 文本的按钮
-              if (text && (text.includes('Authorize') || text.includes('授权') || text.includes('Allow') || text.includes('Continue'))) {
-                console.log(`anyrouter: clicking button: "${text?.substring(0, 50)}"`);
-                await btn.click({ timeout: 5000 });
-                clicked = true;
-                await sleep(5000);
-                break;
-              }
-            } catch(e) {
-              // 忽略错误
-            }
-          }
-        }
-        if (!clicked) {
-          console.log('anyrouter: no authorize button found, checking URL...');
-        }
-        console.log('anyrouter after session handling:', page.url());
+        console.log('anyrouter after re-navigate:', page.url());
       }
 
       // 如果到了 authorize 页面，点击授权
