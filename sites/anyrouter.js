@@ -97,13 +97,37 @@ async function run(config = {}) {
       // 如果到了 authorize 页面，点击授权
       if (page.url().includes('authorize')) {
         console.log('anyrouter: clicking Authorize...');
+        // 尝试多种方式点击授权按钮
+        let authorized = false;
+        // 方式 1: 使用 Playwright 点击
         const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
         if (await authBtn.count() > 0) {
-          await authBtn.click();
+          try {
+            await authBtn.click();
+            authorized = true;
+            console.log('anyrouter: clicked Authorize via Playwright');
+          } catch(e) {
+            console.log('anyrouter: Playwright click failed:', e.message);
+          }
+        }
+        // 方式 2: 使用 JavaScript 点击
+        if (!authorized) {
+          try {
+            await page.evaluate(() => {
+              const btn = document.querySelector('input[type="submit"], button[type="submit"]');
+              if (btn) btn.click();
+            });
+            authorized = true;
+            console.log('anyrouter: clicked Authorize via JavaScript');
+          } catch(e) {
+            console.log('anyrouter: JavaScript click failed:', e.message);
+          }
+        }
+        if (authorized) {
           console.log('anyrouter: clicked Authorize, waiting for redirect...');
           // 等待页面跳转（带超时和重试）
           let navCompleted = false;
-          for (let i = 0; i < 15; i++) {
+          for (let i = 0; i < 20; i++) {
             await sleep(2000);
             const currentUrl = page.url();
             console.log('anyrouter waiting for redirect, current URL:', currentUrl);
@@ -115,10 +139,14 @@ async function run(config = {}) {
             // 如果回到了 authorize 页面，尝试重新点击
             if (currentUrl.includes('authorize') && i > 5) {
               console.log('anyrouter: still on authorize page, retrying...');
-              const authBtn2 = page.locator('input[type="submit"], button[type="submit"]').first();
-              if (await authBtn2.count() > 0) {
-                await authBtn2.click();
+              try {
+                await page.evaluate(() => {
+                  const btn = document.querySelector('input[type="submit"], button[type="submit"]');
+                  if (btn) btn.click();
+                });
                 await sleep(3000);
+              } catch(e) {
+                console.log('anyrouter: retry click failed:', e.message);
               }
             }
           }
