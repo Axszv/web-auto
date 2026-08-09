@@ -1,4 +1,3 @@
-// sites/agentrouter.js — 尝试多种方式获取 OAuth URL
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -16,14 +15,15 @@ async function saveCookies(data) {
 }
 
 async function run(config = {}) {
-  const GH_USER = config.GH_USER || process.env.GH_USER || '';
-  const GH_PASS = config.GH_PASS || process.env.GH_PASS || '';
+  // GitHub 账号登录
+  const GH_USER = config.GH_USER || process.env.GH_USER || '504740633@qq.com';
+  const GH_PASS = config.GH_PASS || process.env.GH_PASS || 'Lz37265981^';
   const BASE = 'https://agentrouter.org';
   const PROXY = { server: 'http://127.0.0.1:1080' };
 
   console.log('agentrouter: launching chromium via proxy...');
   const browser = await chromium.launch({
-    headless: false,
+    headless: true,
     args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
     proxy: PROXY
   });
@@ -32,12 +32,6 @@ async function run(config = {}) {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
     locale: 'en-US'
-  });
-
-  await ctx.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
   });
 
   const existingCookies = await loadCookies();
@@ -51,113 +45,88 @@ async function run(config = {}) {
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
   page.on('response', async resp => {
     if (resp.url().includes('api/') || resp.url().includes('oauth')) {
-      console.log(`[API] ${resp.url()} -> ${resp.status()} (${resp.headers()['content-type'] || 'unknown'})`);
+      console.log(`[API] ${resp.url()} -> ${resp.status()}`);
     }
   });
 
   try {
-    console.log('agentrouter: navigating to /login via proxy...');
-    await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 90000 });
-    await sleep(5000);
-    console.log('agentrouter URL:', page.url());
+    console.log('agentrouter: Step 1 - navigating to homepage...');
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await sleep(3000);
+    console.log('URL:', page.url());
 
-    // 尝试多种方式获取 OAuth URL
-    console.log('agentrouter: trying to get OAuth URL...');
-    const oauthInfo = await page.evaluate(async () => {
-      const results = {};
-
-      // 方法1: 获取按钮信息
-      const btn = document.querySelector('[aria-label="github_logo"]') ||
-                  document.querySelector('.semi-icon-github_logo') ||
-                  document.querySelector('text=Continue with GitHub');
-      if (btn) {
-        results.foundBtn = true;
-        results.btnClassName = btn.className;
-        results.btnTagName = btn.tagName;
-        // 检查所有父级 a 标签
-        let parent = btn.parentElement;
-        while (parent) {
-          if (parent.tagName === 'A' && parent.href && parent.href !== 'about:blank') {
-            results.href = parent.href;
-            break;
-          }
-          parent = parent.parentElement;
-        }
-        // 检查 onclick
-        results.onclick = btn.getAttribute('onclick');
+    // Step 2: 关闭弹窗
+    console.log('agentrouter: Step 2 - closing popup...');
+    try {
+      const closeBtn = page.locator('button[aria-label="close"]').first();
+      if (await closeBtn.count() > 0) {
+        await closeBtn.click();
+        await sleep(1000);
+        console.log('Popup closed');
       }
-
-      // 方法2: 尝试 API
-      try {
-        const resp = await fetch('/api/oauth/state?mode=login', { credentials: 'include' });
-        if (resp.ok) {
-          const data = await resp.json();
-          results.oauthState = data;
-        }
-      } catch(e) {}
-
-      return results;
-    });
-
-    console.log('agentrouter: oauth info:', JSON.stringify(oauthInfo).substring(0, 500));
-
-    let loggedIn = false;
-
-    if (oauthInfo.href && oauthInfo.href.includes('github')) {
-      console.log('agentrouter: navigating to:', oauthInfo.href);
-      await page.goto(oauthInfo.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(3000);
-    } else if (oauthInfo.oauthState && oauthInfo.oauthState.state) {
-      // 构造 GitHub OAuth URL
-      const githubUrl = `https://github.com/login/oauth/authorize?client_id=Ov23liwqF4o0LXkK2yGg&state=${oauthInfo.oauthState.state}`;
-      console.log('agentrouter: navigating to GitHub OAuth:', githubUrl);
-      await page.goto(githubUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(3000);
+    } catch(e) {
+      console.log('No popup to close');
     }
 
-    if (page.url().includes('github.com')) {
-      console.log('agentrouter: on GitHub page');
-      if (page.url().includes('/login')) {
+    // Step 3: 点击登录按钮
+    console.log('agentrouter: Step 3 - clicking login button...');
+    const loginBtn = page.locator('button:has-text("登录")').first();
+    console.log('Login button count:', await loginBtn.count());
+    if (await loginBtn.count() > 0) {
+      await loginBtn.click();
+      await sleep(2000);
+      console.log('After login click, URL:', page.url());
+    }
+
+    // 检查是否已登录
+    let isLoggedIn = await page.evaluate(() => window.location.href.indexOf('login') < 0);
+    if (isLoggedIn) {
+      console.log('agentrouter: already logged in');
+    } else {
+      // Step 4: 点击【使用 GitHub 继续】
+      console.log('agentrouter: Step 4 - clicking GitHub button...');
+      const githubBtn = page.locator('button').filter({ hasText: 'GitHub' }).first();
+      console.log('GitHub button count:', await githubBtn.count());
+      if (await githubBtn.count() > 0) {
+        await githubBtn.click({ force: true });
+        await sleep(3000);
+        console.log('After GitHub click, URL:', page.url());
+      }
+
+      // Step 5: GitHub 自动登录
+      if (page.url().includes('github.com/login')) {
+        console.log('agentrouter: Step 5 - GitHub auto-login...');
         await page.locator('input[name="login"]').first().fill(GH_USER);
         await page.locator('input[name="password"]').first().fill(GH_PASS);
         await page.locator('input[type="submit"]').first().click();
+        await sleep(3000);
+        console.log('After GitHub login, URL:', page.url());
+
+        // 如果需要 authorize
+        if (page.url().includes('authorize')) {
+          const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
+          if (await authBtn.count() > 0) {
+            await authBtn.click({ force: true });
+            await sleep(3000);
+          }
+        }
+      }
+
+      // 等待 OAuth 回调
+      console.log('agentrouter: waiting for OAuth callback...');
+      isLoggedIn = false;
+      for (let i = 0; i < 30; i++) {
         await sleep(2000);
-        if (!page.url().includes('/login')) {
-          try {
-            await page.waitForURL(u => u.toString().includes('authorize'), { timeout: 15000 });
-            const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-            if (await authBtn.count() > 0) await authBtn.click({ force: true });
-          } catch(e) {}
-          await sleep(5000);
-          loggedIn = !page.url().includes('login');
+        const url = page.url();
+        if (!url.includes('github.com') && !url.includes('oauth') && !url.includes('authorize')) {
+          console.log('agentrouter: OAuth callback detected! URL:', url);
+          isLoggedIn = true;
+          break;
         }
       }
     }
 
-    if (!loggedIn && oauthInfo.foundBtn) {
-      console.log('agentrouter: clicking button via JS...');
-      await page.evaluate(() => {
-        const btn = document.querySelector('[aria-label="github_logo"]') ||
-                    document.querySelector('.semi-icon-github_logo');
-        if (btn) btn.click();
-      });
-      await sleep(5000);
-      console.log('agentrouter: after JS click, URL:', page.url());
-      if (page.url().includes('github.com')) {
-        loggedIn = true;
-      }
-    }
-
-    if (loggedIn || page.url().includes('github.com')) {
-      if (page.url().includes('github.com') && page.url().includes('authorize')) {
-        const authBtn = page.locator('button[type="submit"], .btn-primary, text=Authorize').first();
-        if (await authBtn.count() > 0) await authBtn.click({ force: true });
-        await sleep(5000);
-        loggedIn = !page.url().includes('login');
-      }
-    }
-
-    if (loggedIn) {
+    if (isLoggedIn) {
       console.log('agentrouter: logged in!');
       const checkinSuccess = await doCheckin(page, ctx, BASE);
       await saveCtxCookies(ctx, BASE);
