@@ -212,6 +212,13 @@ async function tryOAuthLogin(page, ctx, BASE, CLIENT_ID, GH_USER, GH_PASS) {
       const currentUrl = page.url();
       console.log('agentrouter: current URL:', currentUrl);
 
+      // 首先检查 U2F 页面（在输入凭据之前）
+      if (currentUrl.includes('github.com/u2f')) {
+        console.log('agentrouter: U2F page detected - needs physical device interaction');
+        await saveGitHubCookies(ctx);
+        return false;
+      }
+
       // 检查是否已经被重定向到授权页面（已有 GitHub session）
       // 注意：URL 可能是 https://github.com/login/oauth/authorize?... 或 https://github.com/login?...return_to=.../authorize
       const isAuthorizePage = currentUrl.includes('/login/oauth/authorize') ||
