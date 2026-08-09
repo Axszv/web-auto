@@ -216,6 +216,8 @@ async function tryOAuthLogin(page, ctx, BASE, CLIENT_ID, GH_USER, GH_PASS) {
       // 注意：URL 可能是 https://github.com/login/oauth/authorize?... 或 https://github.com/login?...return_to=.../authorize
       const isAuthorizePage = currentUrl.includes('/login/oauth/authorize') ||
                               (currentUrl.includes('authorize') && !currentUrl.includes('/login?'));
+
+      if (isAuthorizePage) {
         console.log('agentrouter: already on authorize page (GitHub session exists)');
         await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
         await sleep(1000);
