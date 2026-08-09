@@ -113,7 +113,7 @@ async function run(config = {}) {
           for (let i = 0; i < 15; i++) {
             await sleep(1000);
             const url = page.url();
-            if (!url.includes('github.com') && !url.includes('oauth') && !url.includes('authorize')) {
+            if (!url.includes('github.com') && !url.includes('authorize')) {
               isLoggedIn = true;
               break;
             }
