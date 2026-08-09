@@ -53,7 +53,7 @@ async function run(config = {}) {
   try {
     // 先用现有 cookies 尝试访问
     console.log('anyrouter: trying with existing cookies first...');
-    await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(2000);
     const currentUrl = page.url();
     console.log('anyrouter current URL:', currentUrl);
