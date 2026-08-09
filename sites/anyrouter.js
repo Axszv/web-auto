@@ -101,22 +101,30 @@ async function run(config = {}) {
         if (await authBtn.count() > 0) {
           await authBtn.click();
           console.log('anyrouter: clicked Authorize, waiting for redirect...');
-          // 等待页面跳转
-          await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(async (e) => {
-            console.log('anyrouter: navigation timeout after Authorize, checking URL...');
+          // 等待页面跳转（带超时和重试）
+          let navCompleted = false;
+          for (let i = 0; i < 15; i++) {
+            await sleep(2000);
             const currentUrl = page.url();
-            console.log('anyrouter current URL after timeout:', currentUrl);
-            // 如果还在 GitHub 页面，再试一次点击
-            if (currentUrl.includes('github.com')) {
-              console.log('anyrouter: still on GitHub, trying to click Authorize again...');
-              await sleep(2000);
+            console.log('anyrouter waiting for redirect, current URL:', currentUrl);
+            if (!currentUrl.includes('github.com') && !currentUrl.includes('oauth') && !currentUrl.includes('authorize')) {
+              console.log('anyrouter: redirected successfully!');
+              navCompleted = true;
+              break;
+            }
+            // 如果回到了 authorize 页面，尝试重新点击
+            if (currentUrl.includes('authorize') && i > 5) {
+              console.log('anyrouter: still on authorize page, retrying...');
               const authBtn2 = page.locator('input[type="submit"], button[type="submit"]').first();
               if (await authBtn2.count() > 0) {
                 await authBtn2.click();
-                await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+                await sleep(3000);
               }
             }
-          });
+          }
+          if (!navCompleted) {
+            console.log('anyrouter: redirect timeout, current URL:', page.url());
+          }
           await sleep(3000);
           console.log('anyrouter after Authorize click:', page.url());
         }
