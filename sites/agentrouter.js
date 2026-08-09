@@ -80,6 +80,13 @@ async function run(config = {}) {
       }
     }
 
+    // 如果在 /session 页面，说明已登录但需要授权
+    if (page.url().includes('github.com/session')) {
+      console.log('agentrouter: on GitHub session page, waiting for redirect...');
+      await sleep(5000);
+      console.log('agentrouter after session:', page.url());
+    }
+
     // 等待 OAuth 回调
     console.log('agentrouter: waiting for OAuth callback...');
     for (let i = 0; i < 30; i++) {
