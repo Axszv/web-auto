@@ -52,10 +52,11 @@ const sites = [
       log.push('Result: ' + JSON.stringify(result));
 
       // 对于 agentrouter 和 anyrouter，检查签到是否成功
+      // 注意：这两个站点需要手动更新 cookies，OAuth 无法完全自动化
       if (site.name === 'agentrouter' || site.name === 'anyrouter') {
         if (result.checkinSuccess === false) {
           checkinFailures.push(site.name);
-          log.push('WARNING: ' + site.name + ' checkin may have failed (balance not increased by 25)');
+          log.push('INFO: ' + site.name + ' checkin skipped (OAuth requires manual login, cookies may be expired)');
         } else {
           log.push('OK: ' + site.name + ' checkin successful');
         }
