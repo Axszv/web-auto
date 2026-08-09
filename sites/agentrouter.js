@@ -91,7 +91,11 @@ async function run(config = {}) {
       const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
       if (await authBtn.count() > 0) {
         await authBtn.click();
-        await sleep(5000);
+        console.log('agentrouter: clicked Authorize, waiting for redirect...');
+        // 等待页面跳转
+        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        await sleep(3000);
+        console.log('agentrouter after Authorize click:', page.url());
       } else {
         console.log('agentrouter: no authorize button found, current URL:', page.url());
       }
