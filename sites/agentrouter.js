@@ -93,11 +93,12 @@ async function run(config = {}) {
       }
     }
 
-    // 等待 OAuth 回调
+    // 等待 OAuth 回调（增加超时时间）
     console.log('agentrouter: waiting for OAuth callback...');
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       await sleep(2000);
       const url = page.url();
+      console.log('agentrouter current URL:', url);
       if (!url.includes('github.com') && !url.includes('oauth') && !url.includes('authorize')) {
         console.log('agentrouter: OAuth callback detected! URL:', url);
         isLoggedIn = true;
