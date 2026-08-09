@@ -36,10 +36,10 @@
     },
     {
       "name": "acw_tc",
-      "value": "0a0ccb7f17858127070344058e5a00ef7a0f85d2d76321800a3c468d79f3d7",
+      "value": "0a0f6ba617862566405335136e5097fa759ca4c8cb24c3394770ca79bd9789",
       "domain": "agentrouter.org",
       "path": "/",
-      "expires": 1785814505.660045,
+      "expires": 1786258440.600089,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
@@ -47,34 +47,14 @@
   ],
   "anyrouter": [
     {
-      "name": "acw_tc",
-      "value": "9b66b49517858063002021921e118dbcd990a363a5b8d0165a37f63c1c",
+      "name": "session",
+      "value": "MTc4NjI0MjkwNXxEWDhFQVFMX2dBQUJFQUVRQUFBeF80QUFBUVp6ZEhKcGJtY01EUUFMYjJGMWRHaGZjM1JoZEdVR2MzUnlhVzVuREE0QURGWnVhRE4xVlc1blpraHljUT09fCiiBfqmHwUeMcNcW2QQM8d9_9wigBjUPMmaJI96sDif",
       "domain": "anyrouter.top",
       "path": "/",
-      "expires": 1785809898.908484,
+      "expires": 1788834905.462416,
       "httpOnly": true,
       "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "cdn_sec_tc",
-      "value": "9b66b49517858063002021921e118dbcd990a363a5b8d0165a37f63c1c",
-      "domain": "anyrouter.top",
-      "path": "/",
-      "expires": 1785809898.909385,
-      "httpOnly": true,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "acw_sc__v2",
-      "value": "6a713ddc9daf375ad22a182485cdb44bbdfcff99",
-      "domain": "anyrouter.top",
-      "path": "/",
-      "expires": 1785809898.96864,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
+      "sameSite": "Strict"
     }
   ]
 }
