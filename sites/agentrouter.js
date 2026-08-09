@@ -73,8 +73,18 @@ async function run(config = {}) {
           await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
           await sleep(1000);
           await page.evaluate(() => {
-            const btn = document.querySelector('input[value="Authorize"], button[type="submit"]');
-            if (btn) btn.click();
+            // 查找包含 Authorize 文本的按钮
+            const allBtns = document.querySelectorAll('input[type="submit"], button');
+            for (const btn of allBtns) {
+              const text = btn.textContent || btn.value;
+              if (text && text.includes('Authorize')) {
+                btn.click();
+                return;
+              }
+            }
+            // 如果没有找到，点击第一个 submit 按钮
+            const firstSubmit = document.querySelector('input[type="submit"]');
+            if (firstSubmit) firstSubmit.click();
           }).catch(() => {});
           // 等待回调
           for (let i = 0; i < 15; i++) {
