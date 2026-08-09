@@ -48,7 +48,11 @@ async function run(config = {}) {
     // agentrouter 始终使用 GitHub OAuth 登录
     console.log('agentrouter: starting GitHub OAuth flow...');
     const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
-    await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // 使用较短超时，因为页面可能已经加载
+    await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(async (e) => {
+      console.log('agentrouter: initial navigation timeout, trying again...');
+      await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    });
     await sleep(2000);
     console.log('agentrouter GitHub OAuth URL:', page.url());
 
