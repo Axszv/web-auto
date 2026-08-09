@@ -75,9 +75,26 @@ async function run(config = {}) {
     const currentUrl = page.url();
     console.log('agentrouter current URL:', currentUrl);
 
-    // 检查是否已登录
+    // 检查是否已登录 - 不仅检查 URL，还要检查 API 是否可访问
     let isLoggedIn = !currentUrl.includes('login') && !currentUrl.includes('github.com');
     console.log('agentrouter logged in with cookies:', isLoggedIn);
+
+    // 验证 cookies 是否有效
+    if (isLoggedIn) {
+      const apiCheck = await page.evaluate(async () => {
+        try {
+          const r = await fetch('/api/user/info', { credentials: 'include' });
+          return { status: r.status, ok: r.ok };
+        } catch(e) {
+          return { error: e.message };
+        }
+      });
+      console.log('agentrouter API check:', JSON.stringify(apiCheck));
+      if (apiCheck.status === 401 || !apiCheck.ok) {
+        isLoggedIn = false;
+        console.log('agentrouter: cookies expired, will try OAuth');
+      }
+    }
 
     if (!isLoggedIn) {
       console.log('agentrouter: cookies invalid, attempting OAuth...');
