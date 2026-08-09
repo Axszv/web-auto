@@ -96,65 +96,67 @@ async function run(config = {}) {
 
       // 如果到了 authorize 页面，点击授权
       if (page.url().includes('authorize')) {
-        console.log('anyrouter: clicking Authorize...');
-        // 尝试多种方式点击授权按钮
-        let authorized = false;
-        // 方式 1: 使用 Playwright 点击
-        const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
-        if (await authBtn.count() > 0) {
-          try {
-            await authBtn.click();
-            authorized = true;
-            console.log('anyrouter: clicked Authorize via Playwright');
-          } catch(e) {
-            console.log('anyrouter: Playwright click failed:', e.message);
+        console.log('anyrouter: on authorize page, clicking Authorize...');
+        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+        await sleep(2000);
+
+        // 监听页面导航事件，捕获 OAuth 回调
+        let oauthCallbackUrl = null;
+        page.once('url', (url) => {
+          if (url.includes('anyrouter.top')) {
+            oauthCallbackUrl = url;
+            console.log('anyrouter: OAuth callback intercepted!', url);
           }
-        }
-        // 方式 2: 使用 JavaScript 点击
-        if (!authorized) {
-          try {
-            await page.evaluate(() => {
-              const btn = document.querySelector('input[type="submit"], button[type="submit"]');
-              if (btn) btn.click();
-            });
-            authorized = true;
-            console.log('anyrouter: clicked Authorize via JavaScript');
-          } catch(e) {
-            console.log('anyrouter: JavaScript click failed:', e.message);
-          }
-        }
-        if (authorized) {
-          console.log('anyrouter: clicked Authorize, waiting for redirect...');
-          // 等待页面跳转（带超时和重试）
-          let navCompleted = false;
-          for (let i = 0; i < 20; i++) {
-            await sleep(2000);
-            const currentUrl = page.url();
-            console.log('anyrouter waiting for redirect, current URL:', currentUrl);
-            if (!currentUrl.includes('github.com') && !currentUrl.includes('oauth') && !currentUrl.includes('authorize')) {
-              console.log('anyrouter: redirected successfully!');
-              navCompleted = true;
-              break;
-            }
-            // 如果回到了 authorize 页面，尝试重新点击
-            if (currentUrl.includes('authorize') && i > 5) {
-              console.log('anyrouter: still on authorize page, retrying...');
-              try {
-                await page.evaluate(() => {
-                  const btn = document.querySelector('input[type="submit"], button[type="submit"]');
-                  if (btn) btn.click();
-                });
-                await sleep(3000);
-              } catch(e) {
-                console.log('anyrouter: retry click failed:', e.message);
+        });
+
+        // 使用 JavaScript 点击授权按钮
+        try {
+          await page.evaluate(() => {
+            const selectors = [
+              'input[value="Authorize"]',
+              'input[type="submit"][value*="Authorize"]',
+              'button:has-text("Authorize")',
+              'button[type="submit"]'
+            ];
+            for (const sel of selectors) {
+              const btn = document.querySelector(sel);
+              if (btn) {
+                btn.click();
+                return;
               }
             }
+            const allBtns = document.querySelectorAll('input[type="submit"], button[type="submit"]');
+            if (allBtns.length > 0) allBtns[0].click();
+          });
+          console.log('anyrouter: clicked Authorize via JavaScript');
+        } catch(e) {
+          console.log('anyrouter: JS click failed:', e.message);
+          const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
+          if (await authBtn.count() > 0) {
+            await authBtn.click();
           }
-          if (!navCompleted) {
-            console.log('anyrouter: redirect timeout, current URL:', page.url());
+        }
+
+        // 等待 OAuth 回调（最多 60 秒）
+        console.log('anyrouter: waiting for OAuth callback...');
+        for (let i = 0; i < 60; i++) {
+          await sleep(1000);
+          const url = page.url();
+          if (oauthCallbackUrl) {
+            console.log('anyrouter: OAuth callback detected via listener!');
+            oauthLoggedIn = true;
+            isLoggedIn = true;
+            break;
           }
-          await sleep(3000);
-          console.log('anyrouter after Authorize click:', page.url());
+          if (!url.includes('github.com') && !url.includes('oauth') && !url.includes('authorize')) {
+            console.log('anyrouter: OAuth callback detected! URL:', url);
+            oauthLoggedIn = true;
+            isLoggedIn = true;
+            break;
+          }
+          if (i % 10 === 0) {
+            console.log('anyrouter: still waiting... URL:', url.substring(0, 80));
+          }
         }
       }
 
