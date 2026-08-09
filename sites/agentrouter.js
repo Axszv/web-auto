@@ -56,82 +56,63 @@ async function run(config = {}) {
     console.log('agentrouter GitHub OAuth URL:', page.url());
 
     let isLoggedIn = false;
-    let loginAttempts = 0;
-    const maxAttempts = 3;
+    let oauthSuccess = false;
 
-    // 尝试最多 3 次登录
-    while (loginAttempts < maxAttempts && !isLoggedIn) {
-      loginAttempts++;
-      console.log(`agentrouter: login attempt ${loginAttempts}/${maxAttempts}`);
+    // 尝试 OAuth 登录（最多 2 次）
+    for (let attempt = 1; attempt <= 2 && !oauthSuccess; attempt++) {
+      console.log(`agentrouter: OAuth attempt ${attempt}`);
 
       // 如果在 GitHub 登录页，自动登录
       if (page.url().includes('github.com/login') && !page.url().includes('oauth')) {
-        console.log('agentrouter: on GitHub login page, auto-login...');
-        await page.locator('input[name="login"]').fill(GH_USER).catch(() => {
-          console.log('agentrouter: login field not found, trying email field...');
-          page.locator('input[type="email"], input[name="username"]').first().fill(GH_USER);
-        });
-        await page.locator('input[name="password"]').fill(GH_PASS).catch(() => {
-          console.log('agentrouter: password field not found');
-        });
-        await page.locator('input[type="submit"], button[type="submit"]').first().click().catch(() => {
-          console.log('agentrouter: submit button not found, trying enter...');
+        console.log('agentrouter: on GitHub login page...');
+        await page.locator('input[name="login"]').fill(GH_USER).catch(() => {});
+        await page.locator('input[name="password"]').fill(GH_PASS).catch(() => {});
+        await page.locator('input[type="submit"]').first().click().catch(() => {
           page.locator('input[name="password"]').press('Enter');
         });
-        console.log('agentrouter: submitted login form, waiting for redirect...');
-        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
         await sleep(3000);
-        console.log('agentrouter after GitHub login:', page.url());
       }
 
-      // 如果在 /session 页面，直接导航回 OAuth authorize 页面
+      // 如果在 /session 页面，导航回 authorize
       if (page.url().includes('github.com/session')) {
-        console.log('agentrouter: on GitHub session page, navigating back to OAuth authorize...');
+        console.log('agentrouter: on session page, re-navigating...');
         await sleep(2000);
-        const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
-        await page.goto(oauthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await sleep(3000);
-        console.log('agentrouter after re-navigate:', page.url());
       }
 
       // 如果到了 authorize 页面，点击授权
       if (page.url().includes('authorize')) {
-        console.log('agentrouter: on authorize page, clicking Authorize...');
+        console.log('agentrouter: on authorize page, clicking...');
         await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
         await sleep(2000);
 
-        // 使用 JavaScript 点击授权按钮
-        try {
-          await page.evaluate(() => {
-            const btn = document.querySelector('input[value="Authorize"], input[type="submit"][value*="Authorize"], button:has-text("Authorize")');
-            if (btn) btn.click();
-          });
-          console.log('agentrouter: clicked Authorize via JavaScript');
-        } catch(e) {
-          console.log('agentrouter: JS click failed, trying Playwright...');
+        // 使用 JavaScript 点击
+        await page.evaluate(() => {
+          const btn = document.querySelector('input[value="Authorize"], button[type="submit"]');
+          if (btn) btn.click();
+        }).catch(() => {
           const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
-          if (await authBtn.count() > 0) {
-            await authBtn.click();
-          }
-        }
+          if (await authBtn.count() > 0) await authBtn.click();
+        });
 
-        // 等待 OAuth 回调
-        console.log('agentrouter: waiting for OAuth callback...');
+        // 等待回调
+        console.log('agentrouter: waiting for callback...');
         for (let i = 0; i < 30; i++) {
-          await sleep(2000);
+          await sleep(1000);
           const url = page.url();
-          console.log('agentrouter current URL:', url);
           if (!url.includes('github.com') && !url.includes('oauth') && !url.includes('authorize')) {
-            console.log('agentrouter: OAuth callback detected! URL:', url);
+            console.log('agentrouter: callback detected!', url);
+            oauthSuccess = true;
             isLoggedIn = true;
             break;
           }
         }
       }
 
-      // 如果还没有登录成功，重新导航到 OAuth URL
-      if (!isLoggedIn && page.url().includes('github.com')) {
-        console.log('agentrouter: not logged in yet, refreshing OAuth page...');
+      // 如果还没成功，刷新页面再试
+      if (!oauthSuccess && page.url().includes('github.com')) {
+        console.log('agentrouter: refreshing for next attempt...');
         await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await sleep(2000);
       }
