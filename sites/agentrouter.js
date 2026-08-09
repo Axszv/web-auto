@@ -274,6 +274,10 @@ async function tryOAuthLogin(page, ctx, BASE, CLIENT_ID, GH_USER, GH_PASS) {
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
+    // 等待页面稳定
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+    await sleep(2000);
+
     const result = await page.evaluate(async () => {
       const results = {};
       try {
