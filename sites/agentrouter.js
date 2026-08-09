@@ -69,22 +69,42 @@ async function run(config = {}) {
       console.log('agentrouter after GitHub login:', page.url());
     }
 
-    // 如果在 /session 页面，等待 GitHub 自动跳转到 authorize
+    // 如果在 /session 页面，找到并点击授权按钮
     if (page.url().includes('github.com/session')) {
-      console.log('agentrouter: on GitHub session page, waiting for redirect to authorize...');
-      for (let i = 0; i < 20; i++) {
-        await sleep(1000);
-        const url = page.url();
-        console.log('agentrouter current URL:', url);
-        if (url.includes('authorize')) {
-          console.log('agentrouter: redirected to authorize!');
-          break;
-        }
-        if (!url.includes('github.com/session')) {
-          console.log('agentrouter: redirected away from session');
-          break;
+      console.log('agentrouter: on GitHub session page, looking for authorize button...');
+      await sleep(3000);
+      // 尝试多种选择器查找按钮
+      const selectors = [
+        'button[type="submit"]',
+        'input[type="submit"]',
+        'button:has-text("Authorize")',
+        'button:has-text("Allow")',
+        'button:has-text("授权")',
+        'button:has-text("继续")',
+        '.btn-primary',
+        'button:not([disabled])'
+      ];
+      let clicked = false;
+      for (const selector of selectors) {
+        const btn = page.locator(selector).first();
+        if (await btn.count() > 0) {
+          const text = await btn.textContent().catch(() => '');
+          console.log(`agentrouter: found button "${text}" with selector ${selector}`);
+          if (text || selector.includes('input') || selector.includes('button[type')) {
+            await btn.click();
+            clicked = true;
+            console.log('agentrouter: clicked button, waiting...');
+            await sleep(3000);
+            break;
+          }
         }
       }
+      if (!clicked) {
+        console.log('agentrouter: no button found, trying refresh...');
+        await page.reload();
+        await sleep(3000);
+      }
+      console.log('agentrouter after session handling:', page.url());
     }
 
     // 如果到了 authorize 页面，点击授权
