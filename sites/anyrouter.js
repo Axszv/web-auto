@@ -67,24 +67,27 @@ async function run(config = {}) {
       await page.locator('input[type="submit"]').click();
       await sleep(3000);
       console.log('anyrouter after GitHub login:', page.url());
-
-      // 如果到了 authorize 页面，点击授权
-      if (page.url().includes('authorize')) {
-        console.log('anyrouter: clicking Authorize...');
-        await sleep(2000);
-        const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
-        if (await authBtn.count() > 0) {
-          await authBtn.click();
-          await sleep(3000);
-        }
-      }
     }
 
-    // 如果在 /session 页面，说明已登录但需要授权
+    // 如果在 /session 页面，等待并重定向到 authorize
     if (page.url().includes('github.com/session')) {
-      console.log('anyrouter: on GitHub session page, waiting for redirect...');
-      await sleep(5000);
-      console.log('anyrouter after session:', page.url());
+      console.log('anyrouter: on GitHub session page, navigating to authorize...');
+      await sleep(2000);
+      // 尝试导航回 OAuth authorize 页面
+      const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
+      await page.goto(oauthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(3000);
+      console.log('anyrouter after re-navigate:', page.url());
+    }
+
+    // 如果到了 authorize 页面，点击授权
+    if (page.url().includes('authorize')) {
+      console.log('anyrouter: clicking Authorize...');
+      const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
+      if (await authBtn.count() > 0) {
+        await authBtn.click();
+        await sleep(3000);
+      }
     }
 
     // 等待 OAuth 回调
