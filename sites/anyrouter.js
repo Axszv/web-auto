@@ -72,9 +72,10 @@ async function run(config = {}) {
     // 如果在 /session 页面，找到并点击授权按钮
     if (page.url().includes('github.com/session')) {
       console.log('anyrouter: on GitHub session page, looking for authorize button...');
-      await sleep(3000);
-      // 等待页面加载完成
-      await page.waitForSelector('button, input[type="submit"]', { timeout: 5000 }).catch(() => {});
+      await sleep(5000);
+      // 等待页面完全加载
+      await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+      await sleep(2000);
       // 尝试多种选择器查找按钮
       const selectors = [
         'button[type="submit"]',
@@ -94,11 +95,27 @@ async function run(config = {}) {
           console.log(`anyrouter: found button "${text?.substring(0, 50)}" with selector ${selector}`);
           // 排除 "Continue with Google" 等第三方登录按钮
           if (text && !text.includes('Google') && !text.includes('Facebook') && !text.includes('Apple')) {
-            await btn.click();
-            clicked = true;
-            console.log('anyrouter: clicked button, waiting...');
-            await sleep(3000);
-            break;
+            try {
+              await btn.click({ timeout: 10000 });
+              clicked = true;
+              console.log('anyrouter: clicked button, waiting...');
+              await sleep(5000);
+              break;
+            } catch(e) {
+              console.log('anyrouter: click failed, trying JavaScript...');
+              try {
+                await page.evaluate((sel) => {
+                  const btn = document.querySelector(sel);
+                  if (btn) btn.click();
+                }, selector);
+                clicked = true;
+                console.log('anyrouter: clicked via JS, waiting...');
+                await sleep(5000);
+                break;
+              } catch(e2) {
+                console.log('anyrouter: JS click also failed:', e2.message);
+              }
+            }
           }
         }
       }
@@ -111,12 +128,12 @@ async function run(config = {}) {
           const btn = buttons.nth(i);
           const text = await btn.textContent().catch(() => '');
           console.log(`anyrouter: button ${i}: "${text?.substring(0, 50)}"`);
-          if (text && !text.includes('Google') && !text.includes('Facebook') && !text.includes('Apple') && text.length > 0) {
+          if (text && !text.includes('Google') && !text.includes('Facebook') && !text.includes('Apple') && text.trim().length > 0) {
             try {
-              await btn.click();
+              await btn.click({ timeout: 10000 });
               clicked = true;
               console.log('anyrouter: clicked button, waiting...');
-              await sleep(3000);
+              await sleep(5000);
               break;
             } catch(e) {
               console.log('anyrouter: failed to click button:', e.message);
@@ -127,7 +144,7 @@ async function run(config = {}) {
       if (!clicked) {
         console.log('anyrouter: no suitable button found, trying refresh...');
         await page.reload();
-        await sleep(3000);
+        await sleep(5000);
       }
       console.log('anyrouter after session handling:', page.url());
     }
