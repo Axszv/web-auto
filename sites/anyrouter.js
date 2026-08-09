@@ -104,13 +104,32 @@ async function run(config = {}) {
             await sleep(2000);
 
             // 使用 JavaScript 点击
-            await page.evaluate(() => {
-              const btn = document.querySelector('input[value="Authorize"], button[type="submit"]');
-              if (btn) btn.click();
-            }).catch(() => {
+            try {
+              await page.evaluate(() => {
+                const selectors = [
+                  'input[value="Authorize"]',
+                  'input[type="submit"][value*="Authorize"]',
+                  'button:has-text("Authorize")',
+                  'button[type="submit"]'
+                ];
+                for (const sel of selectors) {
+                  const btn = document.querySelector(sel);
+                  if (btn) {
+                    btn.click();
+                    return;
+                  }
+                }
+                const allBtns = document.querySelectorAll('input[type="submit"], button[type="submit"]');
+                if (allBtns.length > 0) allBtns[0].click();
+              });
+              console.log('anyrouter: clicked Authorize via JavaScript');
+            } catch(e) {
+              console.log('anyrouter: JS click failed:', e.message);
               const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
-              if (await authBtn.count() > 0) await authBtn.click();
-            });
+              if (await authBtn.count() > 0) {
+                await authBtn.click();
+              }
+            }
 
             // 等待回调
             console.log('anyrouter: waiting for callback...');
