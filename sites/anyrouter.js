@@ -168,8 +168,9 @@ async function run(config = {}) {
     if (!isLoggedIn) {
       console.log('anyrouter: cookies invalid, trying OAuth...');
       let oauthSuccess = false;
+      let u2fCount = 0; // 追踪 U2F 触发次数
 
-      for (let attempt = 1; attempt <= 2 && !oauthSuccess; attempt++) {
+      for (let attempt = 1; attempt <= 3 && !oauthSuccess; attempt++) {
         console.log(`anyrouter: OAuth attempt ${attempt}`);
         const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
 
@@ -188,11 +189,33 @@ async function run(config = {}) {
           const url = page.url();
           console.log('anyrouter: current URL:', url);
 
-          // 检测 U2F
+          // 检测 U2F - 尝试重新导航
           if (url.includes('u2f')) {
-            console.log('anyrouter: U2F detected, saving session...');
+            u2fCount++;
+            console.log(`anyrouter: U2F detected (attempt ${u2fCount}), retrying...`);
             await saveGitHubCookies(ctx);
-            return { success: true, checkinSuccess: false, needsU2F: true };
+
+            // 如果是第一次遇到 U2F，尝试重新导航
+            if (u2fCount <= 2) {
+              await randomDelay(2000, 3000);
+              await page.goto(githubOAuthUrl, { waitUntil: 'networkidle', timeout: 30000 });
+              await randomDelay(2000, 3000);
+              const newUrl = page.url();
+              console.log('anyrouter: after retry URL:', newUrl);
+
+              // 如果重新导航后还是 U2F，放弃
+              if (newUrl.includes('u2f')) {
+                console.log('anyrouter: still on U2F page after retry, cannot automate');
+                return { success: true, checkinSuccess: false, needsU2F: true };
+              }
+              // 如果到了授权页面，继续流程
+              if (newUrl.includes('/login/oauth/authorize')) {
+                continue; // 继续到授权逻辑
+              }
+            } else {
+              console.log('anyrouter: too many U2F attempts, giving up');
+              return { success: true, checkinSuccess: false, needsU2F: true };
+            }
           }
 
           // 检测登录页
