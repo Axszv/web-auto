@@ -65,112 +65,73 @@ async function run(config = {}) {
     let isLoggedIn = !currentUrl.includes('login') && !currentUrl.includes('github.com');
     console.log('anyrouter logged in with cookies:', isLoggedIn);
 
-    // 如果 cookies 无效，进行 OAuth 登录
+    // 如果 cookies 无效，尝试 OAuth 登录（最多 2 次）
     if (!isLoggedIn) {
-      console.log('anyrouter: cookies invalid, starting OAuth flow...');
-      const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
-      await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await sleep(2000);
-      console.log('anyrouter GitHub OAuth URL:', page.url());
+      console.log('anyrouter: cookies invalid, trying OAuth...');
+      let oauthSuccess = false;
 
-      // 如果在 GitHub 登录页，自动登录
-      if (page.url().includes('github.com/login')) {
-        console.log('anyrouter: on GitHub login page, auto-login...');
-        await page.locator('input[name="login"]').fill(GH_USER);
-        await page.locator('input[name="password"]').fill(GH_PASS);
-        await page.locator('input[type="submit"]').click();
-        await sleep(5000);
-        console.log('anyrouter after GitHub login:', page.url());
-      }
+      for (let attempt = 1; attempt <= 2 && !oauthSuccess; attempt++) {
+        console.log(`anyrouter: OAuth attempt ${attempt}`);
+        const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
 
-      // 如果在 /session 页面，直接导航回 OAuth authorize 页面
-      // 因为登录已成功，GitHub 应该会自动授权
-      if (page.url().includes('github.com/session')) {
-        console.log('anyrouter: on GitHub session page, navigating back to OAuth authorize...');
-        await sleep(2000);
-        const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
-        await page.goto(oauthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await sleep(3000);
-        console.log('anyrouter after re-navigate:', page.url());
-      }
-
-      // 如果到了 authorize 页面，点击授权
-      if (page.url().includes('authorize')) {
-        console.log('anyrouter: on authorize page, clicking Authorize...');
-        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-        await sleep(2000);
-
-        // 监听页面导航事件，捕获 OAuth 回调
-        let oauthCallbackUrl = null;
-        page.once('url', (url) => {
-          if (url.includes('anyrouter.top')) {
-            oauthCallbackUrl = url;
-            console.log('anyrouter: OAuth callback intercepted!', url);
-          }
-        });
-
-        // 使用 JavaScript 点击授权按钮
         try {
-          await page.evaluate(() => {
-            const selectors = [
-              'input[value="Authorize"]',
-              'input[type="submit"][value*="Authorize"]',
-              'button:has-text("Authorize")',
-              'button[type="submit"]'
-            ];
-            for (const sel of selectors) {
-              const btn = document.querySelector(sel);
-              if (btn) {
-                btn.click();
-                return;
+          await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await sleep(2000);
+
+          // 如果在 GitHub 登录页，自动登录
+          if (page.url().includes('github.com/login') && !page.url().includes('oauth')) {
+            console.log('anyrouter: on GitHub login page...');
+            await page.locator('input[name="login"]').fill(GH_USER).catch(() => {});
+            await page.locator('input[name="password"]').fill(GH_PASS).catch(() => {});
+            await page.locator('input[type="submit"]').first().click().catch(() => {
+              page.locator('input[name="password"]').press('Enter');
+            });
+            await sleep(3000);
+          }
+
+          // 如果在 /session 页面，导航回 authorize
+          if (page.url().includes('github.com/session')) {
+            console.log('anyrouter: on session page, re-navigating...');
+            await sleep(2000);
+            await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await sleep(3000);
+          }
+
+          // 如果到了 authorize 页面，点击授权
+          if (page.url().includes('authorize')) {
+            console.log('anyrouter: on authorize page, clicking...');
+            await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+            await sleep(2000);
+
+            // 使用 JavaScript 点击
+            await page.evaluate(() => {
+              const btn = document.querySelector('input[value="Authorize"], button[type="submit"]');
+              if (btn) btn.click();
+            }).catch(() => {
+              const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
+              if (await authBtn.count() > 0) await authBtn.click();
+            });
+
+            // 等待回调
+            console.log('anyrouter: waiting for callback...');
+            for (let i = 0; i < 30; i++) {
+              await sleep(1000);
+              const url = page.url();
+              if (!url.includes('github.com') && !url.includes('oauth') && !url.includes('authorize')) {
+                console.log('anyrouter: callback detected!', url);
+                oauthSuccess = true;
+                isLoggedIn = true;
+                break;
               }
             }
-            const allBtns = document.querySelectorAll('input[type="submit"], button[type="submit"]');
-            if (allBtns.length > 0) allBtns[0].click();
-          });
-          console.log('anyrouter: clicked Authorize via JavaScript');
+          }
         } catch(e) {
-          console.log('anyrouter: JS click failed:', e.message);
-          const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
-          if (await authBtn.count() > 0) {
-            await authBtn.click();
-          }
-        }
-
-        // 等待 OAuth 回调（最多 60 秒）
-        console.log('anyrouter: waiting for OAuth callback...');
-        for (let i = 0; i < 60; i++) {
-          await sleep(1000);
-          const url = page.url();
-          if (oauthCallbackUrl) {
-            console.log('anyrouter: OAuth callback detected via listener!');
-            oauthLoggedIn = true;
-            isLoggedIn = true;
-            break;
-          }
-          if (!url.includes('github.com') && !url.includes('oauth') && !url.includes('authorize')) {
-            console.log('anyrouter: OAuth callback detected! URL:', url);
-            oauthLoggedIn = true;
-            isLoggedIn = true;
-            break;
-          }
-          if (i % 10 === 0) {
-            console.log('anyrouter: still waiting... URL:', url.substring(0, 80));
-          }
+          console.log('anyrouter: OAuth attempt failed:', e.message);
         }
       }
 
-      // 等待 OAuth 回调（增加超时时间）
-      console.log('anyrouter: waiting for OAuth callback...');
-      for (let i = 0; i < 60; i++) {
-        await sleep(2000);
-        const url = page.url();
-        console.log('anyrouter current URL:', url);
-        if (!url.includes('github.com') && !url.includes('oauth') && !url.includes('authorize')) {
-          console.log('anyrouter: OAuth callback detected! URL:', url);
-          isLoggedIn = true;
-          break;
-        }
+      if (!oauthSuccess) {
+        console.log('anyrouter: OAuth failed after 2 attempts');
       }
     }
 
