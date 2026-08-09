@@ -1,12 +1,25 @@
-// sites/agentrouter.js — GitHub OAuth 登录 (反检测优化版)
+// sites/agentrouter.js — GitHub OAuth 登录 (持久化浏览器上下文)
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-async function sleep(ms) { return new Promise(r => setTimeout(r, ms + Math.random() * 500)); }
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function randomDelay(min, max) {
-  await sleep(min + Math.random() * (max - min));
+const STATE_DIR = path.join(__dirname, '..', '.playwright-state');
+const STATE_FILE = path.join(STATE_DIR, 'state.json');
+
+async function loadState() {
+  if (fs.existsSync(STATE_FILE)) {
+    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+  }
+  return null;
+}
+
+async function saveState(state) {
+  if (!fs.existsSync(STATE_DIR)) {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+  }
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state), 'utf8');
 }
 
 async function loadCookies() {
@@ -29,103 +42,67 @@ async function run(config = {}) {
   console.log('agentrouter: launching chromium...');
   const isHeadless = !process.env.DISPLAY;
   console.log('agentrouter: headless mode:', isHeadless);
-  const browser = await chromium.launch({
-    headless: isHeadless,
-    args: [
-      '--no-sandbox',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-dev-shm-usage',
-      '--disable-extensions',
-      '--disable-gpu',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process'
-    ],
-    proxy: PROXY
-  });
 
-  // 使用更真实的浏览器配置
-  const ctx = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    viewport: { width: 1920, height: 1080 },
-    locale: 'en-US',
-    timezoneId: 'America/New_York',
-    permissions: ['geolocation'],
-    deviceScaleFactor: 1,
-    hasTouch: false,
-    isMobile: false,
-    colorScheme: 'light',
-    reducedMotion: 'no-preference',
-    reducedTransparency: 'no-preference'
-  });
+  // 检查是否有持久化状态
+  const existingState = await loadState();
 
-  // 更强的反检测脚本
-  await ctx.addInitScript(() => {
-    // 隐藏 webdriver 特征
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  let browser;
+  let ctx;
 
-    // 模拟真实 Chrome
-    window.chrome = {
-      runtime: {},
-      loadTimes: function() {},
-      csi: function() {},
-      app: {}
-    };
-
-    // 设置真实的语言列表
-    Object.defineProperty(navigator, 'languages', {
-      get: () => ['en-US', 'en', 'zh-CN', 'zh']
+  if (existingState) {
+    console.log('agentrouter: restoring persistent browser state...');
+    browser = await chromium.launchPersistentContext(STATE_DIR, {
+      headless: isHeadless,
+      args: [
+        '--no-sandbox',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--disable-extensions',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process'
+      ],
+      proxy: PROXY
     });
-
-    // 模拟真实的 plugins
-    Object.defineProperty(navigator, 'plugins', {
-      get: () => {
-        return {
-          length: 4,
-          [Symbol.iterator]: function* () {
-            yield { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' };
-            yield { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' };
-            yield { name: 'Native Client', filename: 'internal-nacl-plugin' };
-            yield { name: 'PDF Viewer', filename: 'pdf Viewer' };
-          }
-        };
-      }
+    ctx = browser;
+  } else {
+    browser = await chromium.launch({
+      headless: isHeadless,
+      args: [
+        '--no-sandbox',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--disable-extensions',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process'
+      ],
+      proxy: PROXY
     });
-
-    // 模拟真实的 webgl renderer
-    const getParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-      if (parameter === 37445) return 'Google Inc. (AMD)';
-      if (parameter === 37446) return 'ANGLE (AMD, AMD Radeon RX 5700 Series Direct3D11 vs_5_0 ps_5_0)';
-      return getParameter.call(this, parameter);
-    };
-
-    // 模拟真实的连接信息
-    window.navigator.connection = {
-      effectiveType: '4g',
-      rtt: 50,
-      downlink: 10,
-      saveData: false,
-      onchange: null
-    };
-
-    // 移除 automation 相关属性
-    delete navigator.__proto__.webdriver;
-  });
-
-  const existingCookies = await loadCookies();
-  if (existingCookies.agentrouter && existingCookies.agentrouter.length > 0) {
-    await ctx.addCookies(existingCookies.agentrouter);
-    console.log('agentrouter: restored existing cookies');
+    ctx = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      viewport: { width: 1920, height: 1080 },
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
+      permissions: ['geolocation'],
+      deviceScaleFactor: 1,
+      hasTouch: false,
+      isMobile: false
+    });
   }
 
-  const page = await ctx.newPage();
+  // 注入反检测脚本
+  await ctx.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    window.chrome = { runtime: {} };
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    window.navigator.connection = { effectiveType: '4g', rtt: 50, downlink: 10 };
+  });
 
-  // 添加鼠标移动模拟
-  await page.mouse.move(100, 100);
-  await randomDelay(100, 300);
+  const page = await ctx.newPage();
 
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
@@ -138,10 +115,14 @@ async function run(config = {}) {
   try {
     // 尝试使用现有 cookies
     console.log('agentrouter: trying with existing cookies...');
-    await page.goto(BASE, { waitUntil: 'networkidle', timeout: 20000 }).catch(async () => {
-      await page.goto(BASE, { waitUntil: 'networkidle', timeout: 20000 });
-    });
-    await randomDelay(1000, 2000);
+    const existingCookies = await loadCookies();
+    if (existingCookies.agentrouter && existingCookies.agentrouter.length > 0) {
+      await ctx.addCookies(existingCookies.agentrouter);
+      console.log('agentrouter: restored existing cookies');
+    }
+
+    await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+    await sleep(2000);
     const currentUrl = page.url();
     console.log('agentrouter current URL:', currentUrl);
 
@@ -168,9 +149,8 @@ async function run(config = {}) {
     if (!isLoggedIn) {
       console.log('agentrouter: cookies invalid, trying OAuth...');
       let oauthSuccess = false;
-      let u2fCount = 0; // 追踪 U2F 触发次数
 
-      for (let attempt = 1; attempt <= 3 && !oauthSuccess; attempt++) {
+      for (let attempt = 1; attempt <= 2 && !oauthSuccess; attempt++) {
         console.log(`agentrouter: OAuth attempt ${attempt}`);
         const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
 
@@ -180,101 +160,59 @@ async function run(config = {}) {
           if (savedCookies.github && savedCookies.github.length > 0) {
             await ctx.addCookies(savedCookies.github);
             console.log('agentrouter: restored GitHub cookies');
-            await randomDelay(500, 1000);
           }
 
-          await page.goto(githubOAuthUrl, { waitUntil: 'networkidle', timeout: 30000 });
-          await randomDelay(1500, 2500);
+          await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await sleep(3000);
 
           const url = page.url();
           console.log('agentrouter: current URL:', url);
 
-          // 检测 U2F - 尝试重新导航
-          if (url.includes('u2f')) {
-            u2fCount++;
-            console.log(`agentrouter: U2F detected (attempt ${u2fCount}), retrying...`);
+          // 检测 U2F - 保存到持久化状态后退出
+          if (url.includes('github.com/u2f')) {
+            console.log('agentrouter: U2F page detected, saving browser state...');
             await saveGitHubCookies(ctx);
-
-            // 如果是第一次遇到 U2F，尝试重新导航
-            if (u2fCount <= 2) {
-              await randomDelay(2000, 3000);
-              await page.goto(githubOAuthUrl, { waitUntil: 'networkidle', timeout: 30000 });
-              await randomDelay(2000, 3000);
-              const newUrl = page.url();
-              console.log('agentrouter: after retry URL:', newUrl);
-
-              // 如果重新导航后还是 U2F，放弃
-              if (newUrl.includes('u2f')) {
-                console.log('agentrouter: still on U2F page after retry, cannot automate');
-                return { success: true, checkinSuccess: false, needsU2F: true };
-              }
-              // 如果到了授权页面，继续流程
-              if (newUrl.includes('/login/oauth/authorize')) {
-                continue; // 继续到授权逻辑
-              }
-            } else {
-              console.log('agentrouter: too many U2F attempts, giving up');
-              return { success: true, checkinSuccess: false, needsU2F: true };
-            }
+            // 保存持久化状态
+            const state = await ctx.storageState();
+            await saveState({ browserType: 'chromium', state: state });
+            console.log('agentrouter: browser state saved for next attempt');
+            return { success: true, checkinSuccess: false, needsU2F: true };
           }
 
           // 检测登录页
           if (url.includes('github.com/login') && !url.includes('oauth')) {
             console.log('agentrouter: on GitHub login page...');
-            await randomDelay(500, 1000);
-
-            // 模拟真实用户输入
-            const loginInput = page.locator('input[name="login"]');
-            await loginInput.waitFor({ timeout: 5000 }).catch(() => {});
-            await loginInput.fill(GH_USER);
-            await randomDelay(200, 500);
-            await loginInput.press('Tab');
-            await randomDelay(200, 500);
-
-            const passInput = page.locator('input[name="password"]');
-            await passInput.waitFor({ timeout: 5000 }).catch(() => {});
-            await passInput.fill(GH_PASS);
-            await randomDelay(300, 800);
-
-            // 模拟真实点击
-            const submitBtn = page.locator('input[type="submit"]');
-            await submitBtn.click();
-            await randomDelay(2000, 4000);
+            await page.locator('input[name="login"]').fill(GH_USER).catch(() => {});
+            await page.locator('input[name="password"]').fill(GH_PASS).catch(() => {});
+            await page.locator('input[type="submit"]').first().click().catch(() => {});
+            await sleep(3000);
           }
 
-          // 检查是否到授权页面
+          // 再次检查 U2F
           const afterLoginUrl = page.url();
-          console.log('agentrouter: after login URL:', afterLoginUrl);
-
-          if (afterLoginUrl.includes('u2f')) {
-            console.log('agentrouter: U2F after login, aborting...');
+          if (afterLoginUrl.includes('github.com/u2f')) {
+            console.log('agentrouter: U2F after login, saving state...');
             await saveGitHubCookies(ctx);
+            const state = await ctx.storageState();
+            await saveState({ browserType: 'chromium', state: state });
             return { success: true, checkinSuccess: false, needsU2F: true };
           }
 
+          // 检测授权页面
           if (afterLoginUrl.includes('/login/oauth/authorize')) {
             console.log('agentrouter: on authorize page, clicking...');
-            await randomDelay(1000, 2000);
-
-            // 寻找并点击 Authorize 按钮
-            const authBtn = page.locator('input[type="submit"][value="Authorize"], button:has-text("Authorize")');
-            if (await authBtn.count() > 0) {
-              await authBtn.hover();
-              await randomDelay(200, 500);
-              await authBtn.click();
-              console.log('agentrouter: clicked Authorize');
-            } else {
-              // 备用方案
-              await page.evaluate(() => {
-                const btns = document.querySelectorAll('input[type="submit"], button');
-                for (const btn of btns) {
-                  if (btn.textContent?.includes('Authorize')) {
-                    btn.click();
-                    return;
-                  }
+            await sleep(1000);
+            await page.evaluate(() => {
+              const btns = document.querySelectorAll('input[type="submit"], button');
+              for (const btn of btns) {
+                if (btn.textContent?.includes('Authorize')) {
+                  btn.click();
+                  return;
                 }
-              });
-            }
+              }
+              const firstSubmit = document.querySelector('input[type="submit"]');
+              if (firstSubmit) firstSubmit.click();
+            }).catch(() => {});
 
             // 等待回调
             console.log('agentrouter: waiting for callback...');
@@ -287,11 +225,6 @@ async function run(config = {}) {
                 isLoggedIn = true;
                 break;
               }
-              if (current.includes('u2f')) {
-                console.log('agentrouter: U2F during callback, aborting...');
-                await saveGitHubCookies(ctx);
-                break;
-              }
             }
           }
         } catch(e) {
@@ -300,8 +233,17 @@ async function run(config = {}) {
       }
 
       if (!oauthSuccess) {
-        console.log('agentrouter: OAuth failed');
+        console.log('agentrouter: OAuth failed after 2 attempts');
       }
+    }
+
+    // 每次运行都保存浏览器状态
+    try {
+      const state = await ctx.storageState();
+      await saveState({ browserType: 'chromium', state: state });
+      console.log('agentrouter: browser state saved');
+    } catch(e) {
+      console.log('agentrouter: failed to save state:', e.message);
     }
 
     if (isLoggedIn) {
@@ -327,8 +269,8 @@ async function run(config = {}) {
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await randomDelay(500, 1000);
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+    await sleep(2000);
 
     const result = await page.evaluate(async () => {
       const results = {};
