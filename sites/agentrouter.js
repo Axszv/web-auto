@@ -93,7 +93,21 @@ async function run(config = {}) {
         await authBtn.click();
         console.log('agentrouter: clicked Authorize, waiting for redirect...');
         // 等待页面跳转
-        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(async (e) => {
+          console.log('agentrouter: navigation timeout after Authorize, checking URL...');
+          const currentUrl = page.url();
+          console.log('agentrouter current URL after timeout:', currentUrl);
+          // 如果还在 GitHub 页面，再试一次点击
+          if (currentUrl.includes('github.com')) {
+            console.log('agentrouter: still on GitHub, trying to click Authorize again...');
+            await sleep(2000);
+            const authBtn2 = page.locator('input[type="submit"], button[type="submit"]').first();
+            if (await authBtn2.count() > 0) {
+              await authBtn2.click();
+              await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+            }
+          }
+        });
         await sleep(3000);
         console.log('agentrouter after Authorize click:', page.url());
       } else {
