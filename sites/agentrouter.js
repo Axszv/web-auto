@@ -60,7 +60,10 @@ async function run(config = {}) {
       await page.locator('input[name="login"]').fill(GH_USER);
       await page.locator('input[name="password"]').fill(GH_PASS);
       await page.locator('input[type="submit"]').click();
-      await sleep(5000);
+      console.log('agentrouter: submitted login form, waiting for redirect...');
+      // 等待页面跳转
+      await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      await sleep(3000);
       console.log('agentrouter after GitHub login:', page.url());
     }
 
@@ -92,13 +95,18 @@ async function run(config = {}) {
       console.log('agentrouter after session handling:', page.url());
     }
 
-    // 如果到了 authorize 页面，点击授权
+    // 如果到了 authorize 页面，等待加载后点击授权
     if (page.url().includes('authorize')) {
+      console.log('agentrouter: on authorize page, waiting for load...');
+      await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+      await sleep(2000);
       console.log('agentrouter: clicking Authorize...');
       const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
       if (await authBtn.count() > 0) {
         await authBtn.click();
         await sleep(5000);
+      } else {
+        console.log('agentrouter: no authorize button found, current URL:', page.url());
       }
     }
 
