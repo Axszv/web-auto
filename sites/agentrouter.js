@@ -88,13 +88,19 @@ async function run(config = {}) {
         await sleep(2000);
 
         // 使用 JavaScript 点击
-        await page.evaluate(() => {
-          const btn = document.querySelector('input[value="Authorize"], button[type="submit"]');
-          if (btn) btn.click();
-        }).catch(() => {
+        try {
+          await page.evaluate(() => {
+            const btn = document.querySelector('input[value="Authorize"], button[type="submit"]');
+            if (btn) btn.click();
+          });
+          console.log('agentrouter: clicked Authorize via JavaScript');
+        } catch(e) {
+          console.log('agentrouter: JS click failed, trying Playwright...');
           const authBtn = page.locator('input[type="submit"], button[type="submit"]').first();
-          if (await authBtn.count() > 0) await authBtn.click();
-        });
+          if (await authBtn.count() > 0) {
+            await authBtn.click();
+          }
+        }
 
         // 等待回调
         console.log('agentrouter: waiting for callback...');
