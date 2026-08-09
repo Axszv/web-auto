@@ -1,9 +1,13 @@
-// sites/agentrouter.js — GitHub OAuth/API 登录
+// sites/agentrouter.js — GitHub OAuth 登录 (反检测优化版)
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms + Math.random() * 500)); }
+
+async function randomDelay(min, max) {
+  await sleep(min + Math.random() * (max - min));
+}
 
 async function loadCookies() {
   const f = path.join(__dirname, '..', 'cookies.json');
@@ -18,12 +22,11 @@ async function saveCookies(data) {
 async function run(config = {}) {
   const GH_USER = config.GH_USER || process.env.GH_USER || '504740633@qq.com';
   const GH_PASS = config.GH_PASS || process.env.GH_PASS || 'Lz37265981^';
-  const GH_TOKEN = config.GH_TOKEN || process.env.GH_TOKEN || '';
   const BASE = 'https://agentrouter.org';
   const PROXY = { server: 'http://127.0.0.1:1080' };
   const CLIENT_ID = 'Ov23lidtiR4LeVZvVRNL';
 
-  console.log('agentrouter: launching chromium via proxy...');
+  console.log('agentrouter: launching chromium...');
   const isHeadless = !process.env.DISPLAY;
   console.log('agentrouter: headless mode:', isHeadless);
   const browser = await chromium.launch({
@@ -36,53 +39,116 @@ async function run(config = {}) {
       '--disable-gpu',
       '--no-first-run',
       '--no-zygote',
-      '--single-process'
+      '--single-process',
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process'
     ],
     proxy: PROXY
   });
 
+  // 使用更真实的浏览器配置
   const ctx = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 },
     locale: 'en-US',
     timezoneId: 'America/New_York',
     permissions: ['geolocation'],
     deviceScaleFactor: 1,
     hasTouch: false,
-    isMobile: false
+    isMobile: false,
+    colorScheme: 'light',
+    reducedMotion: 'no-preference',
+    reducedTransparency: 'no-preference'
   });
 
-  // 注入脚本隐藏 automation 特征
+  // 更强的反检测脚本
   await ctx.addInitScript(() => {
+    // 隐藏 webdriver 特征
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    window.chrome = { runtime: {} };
-    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-    window.navigator.connection = { effectiveType: '4g', rtt: 50, downlink: 10 };
+
+    // 模拟真实 Chrome
+    window.chrome = {
+      runtime: {},
+      loadTimes: function() {},
+      csi: function() {},
+      app: {}
+    };
+
+    // 设置真实的语言列表
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['en-US', 'en', 'zh-CN', 'zh']
+    });
+
+    // 模拟真实的 plugins
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => {
+        return {
+          length: 4,
+          [Symbol.iterator]: function* () {
+            yield { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' };
+            yield { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' };
+            yield { name: 'Native Client', filename: 'internal-nacl-plugin' };
+            yield { name: 'PDF Viewer', filename: 'pdf Viewer' };
+          }
+        };
+      }
+    });
+
+    // 模拟真实的 webgl renderer
+    const getParameter = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+      if (parameter === 37445) return 'Google Inc. (AMD)';
+      if (parameter === 37446) return 'ANGLE (AMD, AMD Radeon RX 5700 Series Direct3D11 vs_5_0 ps_5_0)';
+      return getParameter.call(this, parameter);
+    };
+
+    // 模拟真实的连接信息
+    window.navigator.connection = {
+      effectiveType: '4g',
+      rtt: 50,
+      downlink: 10,
+      saveData: false,
+      onchange: null
+    };
+
+    // 移除 automation 相关属性
+    delete navigator.__proto__.webdriver;
   });
+
+  const existingCookies = await loadCookies();
+  if (existingCookies.agentrouter && existingCookies.agentrouter.length > 0) {
+    await ctx.addCookies(existingCookies.agentrouter);
+    console.log('agentrouter: restored existing cookies');
+  }
 
   const page = await ctx.newPage();
+
+  // 添加鼠标移动模拟
+  await page.mouse.move(100, 100);
+  await randomDelay(100, 300);
+
   page.on('console', msg => console.log('[PAGE]', msg.text().substring(0, 200)));
   page.on('pageerror', err => console.log('[PAGE ERROR]', err.message));
   page.on('response', async resp => {
     if (resp.url().includes('api/') || resp.url().includes('oauth')) {
-      console.log(`[API] ${resp.url()} -> ${resp.status()}`);
+      console.log(`[API] ${resp.url().substring(0, 80)} -> ${resp.status()}`);
     }
   });
 
   try {
-    // agentrouter 尝试使用现有 cookies
+    // 尝试使用现有 cookies
     console.log('agentrouter: trying with existing cookies...');
-    await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-    await sleep(2000);
+    await page.goto(BASE, { waitUntil: 'networkidle', timeout: 20000 }).catch(async () => {
+      await page.goto(BASE, { waitUntil: 'networkidle', timeout: 20000 });
+    });
+    await randomDelay(1000, 2000);
     const currentUrl = page.url();
     console.log('agentrouter current URL:', currentUrl);
 
-    // 检查是否已登录
     let isLoggedIn = !currentUrl.includes('login') && !currentUrl.includes('github.com');
     console.log('agentrouter logged in with cookies:', isLoggedIn, 'URL:', currentUrl);
 
-    // 验证 cookies 是否有效
+    // 验证 cookies
     if (isLoggedIn) {
       const apiCheck = await page.evaluate(async () => {
         try {
@@ -95,23 +161,123 @@ async function run(config = {}) {
       console.log('agentrouter API check:', JSON.stringify(apiCheck));
       if (apiCheck.status === 401 || !apiCheck.ok) {
         isLoggedIn = false;
-        console.log('agentrouter: cookies expired (status=' + apiCheck.status + '), will try login');
+        console.log('agentrouter: cookies expired, will try OAuth');
       }
     }
 
     if (!isLoggedIn) {
-      console.log('agentrouter: cookies invalid, attempting login...');
+      console.log('agentrouter: cookies invalid, trying OAuth...');
+      let oauthSuccess = false;
 
-      // 优先使用 GitHub Token
-      if (GH_TOKEN) {
-        console.log('agentrouter: using GitHub token for API login...');
-        isLoggedIn = await tryTokenLogin(page, BASE, GH_TOKEN);
+      for (let attempt = 1; attempt <= 2 && !oauthSuccess; attempt++) {
+        console.log(`agentrouter: OAuth attempt ${attempt}`);
+        const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
+
+        try {
+          // 先加载 GitHub cookies
+          const savedCookies = await loadCookies();
+          if (savedCookies.github && savedCookies.github.length > 0) {
+            await ctx.addCookies(savedCookies.github);
+            console.log('agentrouter: restored GitHub cookies');
+            await randomDelay(500, 1000);
+          }
+
+          await page.goto(githubOAuthUrl, { waitUntil: 'networkidle', timeout: 30000 });
+          await randomDelay(1500, 2500);
+
+          const url = page.url();
+          console.log('agentrouter: current URL:', url);
+
+          // 检测 U2F
+          if (url.includes('u2f')) {
+            console.log('agentrouter: U2F detected, saving session...');
+            await saveGitHubCookies(ctx);
+            return { success: true, checkinSuccess: false, needsU2F: true };
+          }
+
+          // 检测登录页
+          if (url.includes('github.com/login') && !url.includes('oauth')) {
+            console.log('agentrouter: on GitHub login page...');
+            await randomDelay(500, 1000);
+
+            // 模拟真实用户输入
+            const loginInput = page.locator('input[name="login"]');
+            await loginInput.waitFor({ timeout: 5000 }).catch(() => {});
+            await loginInput.fill(GH_USER);
+            await randomDelay(200, 500);
+            await loginInput.press('Tab');
+            await randomDelay(200, 500);
+
+            const passInput = page.locator('input[name="password"]');
+            await passInput.waitFor({ timeout: 5000 }).catch(() => {});
+            await passInput.fill(GH_PASS);
+            await randomDelay(300, 800);
+
+            // 模拟真实点击
+            const submitBtn = page.locator('input[type="submit"]');
+            await submitBtn.click();
+            await randomDelay(2000, 4000);
+          }
+
+          // 检查是否到授权页面
+          const afterLoginUrl = page.url();
+          console.log('agentrouter: after login URL:', afterLoginUrl);
+
+          if (afterLoginUrl.includes('u2f')) {
+            console.log('agentrouter: U2F after login, aborting...');
+            await saveGitHubCookies(ctx);
+            return { success: true, checkinSuccess: false, needsU2F: true };
+          }
+
+          if (afterLoginUrl.includes('/login/oauth/authorize')) {
+            console.log('agentrouter: on authorize page, clicking...');
+            await randomDelay(1000, 2000);
+
+            // 寻找并点击 Authorize 按钮
+            const authBtn = page.locator('input[type="submit"][value="Authorize"], button:has-text("Authorize")');
+            if (await authBtn.count() > 0) {
+              await authBtn.hover();
+              await randomDelay(200, 500);
+              await authBtn.click();
+              console.log('agentrouter: clicked Authorize');
+            } else {
+              // 备用方案
+              await page.evaluate(() => {
+                const btns = document.querySelectorAll('input[type="submit"], button');
+                for (const btn of btns) {
+                  if (btn.textContent?.includes('Authorize')) {
+                    btn.click();
+                    return;
+                  }
+                }
+              });
+            }
+
+            // 等待回调
+            console.log('agentrouter: waiting for callback...');
+            for (let i = 0; i < 20; i++) {
+              await sleep(1000);
+              const current = page.url();
+              if (!current.includes('github.com') && !current.includes('authorize')) {
+                console.log('agentrouter: callback detected!', current);
+                oauthSuccess = true;
+                isLoggedIn = true;
+                break;
+              }
+              if (current.includes('u2f')) {
+                console.log('agentrouter: U2F during callback, aborting...');
+                await saveGitHubCookies(ctx);
+                break;
+              }
+            }
+          }
+        } catch(e) {
+          console.log('agentrouter: OAuth attempt failed:', e.message);
+        }
       }
 
-      // 备用：OAuth 流程
-      if (!isLoggedIn) {
-        console.log('agentrouter: token login failed or not available, trying OAuth...');
-        isLoggedIn = await tryOAuthLogin(page, ctx, BASE, CLIENT_ID, GH_USER, GH_PASS);
+      if (!oauthSuccess) {
+        console.log('agentrouter: OAuth failed');
       }
     }
 
@@ -135,159 +301,11 @@ async function run(config = {}) {
   }
 }
 
-// 使用 GitHub Token 直接 API 登录
-async function tryTokenLogin(page, BASE, token) {
-  try {
-    console.log('agentrouter: trying token-based login...');
-
-    const userInfo = await page.evaluate(async (token) => {
-      try {
-        const r = await fetch('https://api.github.com/user', {
-          headers: {
-            'Authorization': `token ${token}`,
-            'Accept': 'application/json'
-          }
-        });
-        if (r.ok) {
-          const data = await r.json();
-          return { ok: true, login: data.login, email: data.email };
-        }
-        return { ok: false, status: r.status };
-      } catch(e) {
-        return { error: e.message };
-      }
-    }, token);
-
-    console.log('agentrouter: GitHub API response:', JSON.stringify(userInfo));
-
-    if (userInfo.ok) {
-      const apiCheck = await page.evaluate(async (token) => {
-        try {
-          const r = await fetch('/api/user/info', {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          return { status: r.status, ok: r.ok };
-        } catch(e) {
-          return { error: e.message };
-        }
-      }, token);
-
-      console.log('agentrouter: API check with token:', JSON.stringify(apiCheck));
-
-      if (apiCheck.ok) {
-        console.log('agentrouter: token login successful!');
-        return true;
-      }
-    }
-
-    console.log('agentrouter: token login not supported, falling back to OAuth');
-    return false;
-  } catch(e) {
-    console.log('agentrouter: token login error:', e.message);
-    return false;
-  }
-}
-
-// OAuth 登录流程
-async function tryOAuthLogin(page, ctx, BASE, CLIENT_ID, GH_USER, GH_PASS) {
-  let oauthSuccess = false;
-
-  for (let attempt = 1; attempt <= 2 && !oauthSuccess; attempt++) {
-    console.log(`agentrouter: OAuth attempt ${attempt}`);
-    const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
-
-    try {
-      // 先尝试加载 GitHub 持久化 cookies
-      const existingGitHubCookies = await loadCookies();
-      if (existingGitHubCookies.github && existingGitHubCookies.github.length > 0) {
-        await ctx.addCookies(existingGitHubCookies.github);
-        console.log('agentrouter: restored GitHub session cookies');
-      }
-
-      await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(3000);
-
-      const currentUrl = page.url();
-      console.log('agentrouter: current URL:', currentUrl);
-
-      // 首先检查 U2F 页面（在输入凭据之前）
-      if (currentUrl.includes('github.com/u2f')) {
-        console.log('agentrouter: U2F page detected - needs physical device interaction');
-        await saveGitHubCookies(ctx);
-        return false;
-      }
-
-      // 检查是否已经被重定向到授权页面（已有 GitHub session）
-      // 注意：URL 可能是 https://github.com/login/oauth/authorize?... 或 https://github.com/login?...return_to=.../authorize
-      const isAuthorizePage = currentUrl.includes('/login/oauth/authorize') ||
-                              (currentUrl.includes('authorize') && !currentUrl.includes('/login?'));
-
-      if (isAuthorizePage) {
-        console.log('agentrouter: already on authorize page (GitHub session exists)');
-        await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
-        await sleep(1000);
-        await page.evaluate(() => {
-          const allBtns = document.querySelectorAll('input[type="submit"], button');
-          for (const btn of allBtns) {
-            const text = btn.textContent || btn.value;
-            if (text && text.includes('Authorize')) {
-              btn.click();
-              return;
-            }
-          }
-          const firstSubmit = document.querySelector('input[type="submit"]');
-          if (firstSubmit) firstSubmit.click();
-        }).catch(() => {});
-        console.log('agentrouter: clicked Authorize');
-
-        for (let i = 0; i < 15; i++) {
-          await sleep(1000);
-          const url = page.url();
-          if (!url.includes('github.com') && !url.includes('authorize')) {
-            console.log('agentrouter: callback detected!', url);
-            oauthSuccess = true;
-            isLoggedIn = true;
-            break;
-          }
-        }
-      } else if (currentUrl.includes('github.com/login')) {
-        console.log('agentrouter: on GitHub login page, entering credentials...');
-        await page.locator('input[name="login"]').fill(GH_USER).catch(() => {});
-        await page.locator('input[name="password"]').fill(GH_PASS).catch(() => {});
-        await page.locator('input[type="submit"]').first().click().catch(() => {});
-        await sleep(3000);
-      } else if (currentUrl.includes('github.com/u2f')) {
-        console.log('agentrouter: U2F page detected - cannot automate');
-        await saveGitHubCookies(ctx);
-        return false;
-      } else if (currentUrl.includes('github.com/session')) {
-        console.log('agentrouter: session page detected, waiting...');
-        await sleep(5000);
-        const newUrl = page.url();
-        if (!newUrl.includes('github.com/session')) {
-          console.log('agentrouter: redirected from session:', newUrl);
-        }
-      }
-    } catch(e) {
-      console.log('agentrouter: OAuth attempt failed:', e.message);
-    }
-  }
-
-  if (!oauthSuccess) {
-    console.log('agentrouter: OAuth failed after 2 attempts');
-  }
-
-  return oauthSuccess;
-}
-
 async function doCheckin(page, ctx, BASE) {
   let checkinSuccess = false;
   try {
-    // 等待页面稳定
-    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
-    await sleep(2000);
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    await randomDelay(500, 1000);
 
     const result = await page.evaluate(async () => {
       const results = {};
