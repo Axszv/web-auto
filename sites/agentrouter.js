@@ -158,7 +158,7 @@ async function doCheckin(page, ctx, BASE) {
         results.beforeStatus = r1.status;
       } catch(e) { results.beforeError = e.message; }
       try {
-        const r2 = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
+        const r2 = await fetch('/checkin', { method: 'POST', credentials: 'include' });
         const t2 = await r2.text();
         try { results.checkin = JSON.parse(t2); } catch(e) { results.checkinText = t2.substring(0, 200); }
         results.checkinStatus = r2.status;
