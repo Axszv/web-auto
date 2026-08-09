@@ -141,7 +141,7 @@ async function run(config = {}) {
         await sleep(3000);
       } else {
         // 尝试其他选择器
-        const btns = page.locator('button, input[type="submit"], a[href*="authorize"]').all();
+        const btns = await page.locator('button, input[type="submit"], a[href*="authorize"]').all();
         for (const btn of btns) {
           const text = await btn.textContent().catch(() => '');
           if (text && (text.includes('Authorize') || text.includes('Allow') || text.includes('授权'))) {
