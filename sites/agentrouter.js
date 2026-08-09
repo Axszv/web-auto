@@ -53,7 +53,7 @@ async function run(config = {}) {
   try {
     console.log('agentrouter: navigating to GitHub OAuth directly...');
     const githubOAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(BASE + '/oauth/github')}&scope=user:email`;
-    await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(githubOAuthUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(2000);
     console.log('agentrouter GitHub OAuth URL:', page.url());
 
@@ -73,6 +73,8 @@ async function run(config = {}) {
     if (page.url().includes('github.com/session')) {
       console.log('agentrouter: on GitHub session page, looking for authorize button...');
       await sleep(3000);
+      // 等待页面加载完成
+      await page.waitForSelector('button, input[type="submit"]', { timeout: 5000 }).catch(() => {});
       // 尝试多种选择器查找按钮
       const selectors = [
         'button[type="submit"]',
@@ -82,15 +84,16 @@ async function run(config = {}) {
         'button:has-text("授权")',
         'button:has-text("继续")',
         '.btn-primary',
-        'button:not([disabled])'
       ];
       let clicked = false;
       for (const selector of selectors) {
         const btn = page.locator(selector).first();
-        if (await btn.count() > 0) {
+        const count = await btn.count();
+        if (count > 0) {
           const text = await btn.textContent().catch(() => '');
-          console.log(`agentrouter: found button "${text}" with selector ${selector}`);
-          if (text || selector.includes('input') || selector.includes('button[type')) {
+          console.log(`agentrouter: found button "${text?.substring(0, 50)}" with selector ${selector}`);
+          // 排除 "Continue with Google" 等第三方登录按钮
+          if (text && !text.includes('Google') && !text.includes('Facebook') && !text.includes('Apple')) {
             await btn.click();
             clicked = true;
             console.log('agentrouter: clicked button, waiting...');
@@ -100,7 +103,29 @@ async function run(config = {}) {
         }
       }
       if (!clicked) {
-        console.log('agentrouter: no button found, trying refresh...');
+        // 尝试所有可见按钮
+        const buttons = page.locator('button:not([disabled])');
+        const btnCount = await buttons.count();
+        console.log(`agentrouter: found ${btnCount} visible buttons`);
+        for (let i = 0; i < Math.min(btnCount, 5); i++) {
+          const btn = buttons.nth(i);
+          const text = await btn.textContent().catch(() => '');
+          console.log(`agentrouter: button ${i}: "${text?.substring(0, 50)}"`);
+          if (text && !text.includes('Google') && !text.includes('Facebook') && !text.includes('Apple') && text.length > 0) {
+            try {
+              await btn.click();
+              clicked = true;
+              console.log('agentrouter: clicked button, waiting...');
+              await sleep(3000);
+              break;
+            } catch(e) {
+              console.log('agentrouter: failed to click button:', e.message);
+            }
+          }
+        }
+      }
+      if (!clicked) {
+        console.log('agentrouter: no suitable button found, trying refresh...');
         await page.reload();
         await sleep(3000);
       }
