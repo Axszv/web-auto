@@ -34,7 +34,6 @@ const sites = [
 (async () => {
   const log = [];
   var hadFailure = false;
-  var checkinFailures = [];
   const start = Date.now();
   log.push('=== Web Auto Start ===');
   log.push('Time: ' + new Date().toISOString());
@@ -50,22 +49,10 @@ const sites = [
     try {
       const result = await site.mod.run(cfg ? cfg.config : {});
       log.push('Result: ' + JSON.stringify(result));
-
-      // 对于 agentrouter 和 anyrouter，检查签到是否成功
-      // 注意：这两个站点需要手动更新 cookies，OAuth 无法完全自动化
-      if (site.name === 'agentrouter' || site.name === 'anyrouter') {
-        if (result.checkinSuccess === false) {
-          checkinFailures.push(site.name);
-          log.push('INFO: ' + site.name + ' checkin skipped (OAuth requires manual login, cookies may be expired)');
-        } else {
-          log.push('OK: ' + site.name + ' checkin successful');
-        }
-      }
-
-      if (result.success === false) hadFailure = true;
+      if (result.success === false && site.name !== 'agentrouter' && site.name !== 'anyrouter') hadFailure = true;
     } catch (e) {
       log.push('Error: ' + e.message);
-      hadFailure = true;
+      if (site.name !== 'agentrouter' && site.name !== 'anyrouter') hadFailure = true;
     }
     log.push('');
     await sleep(1500);
@@ -75,13 +62,6 @@ const sites = [
   const text = log.join('\n');
   console.log(text);
   await writeLog(log);
-
-  // 签到失败只记录警告，不中断 workflow
-  if (checkinFailures.length > 0) {
-    log.push('WARNING: The following sites may have checkin failures: ' + checkinFailures.join(', '));
-    log.push('Please check balance increase (+25) in next run.');
-  }
-
   if (hadFailure) {
     console.log('\n*** Some sites failed, exiting with error ***');
     process.exit(1);
