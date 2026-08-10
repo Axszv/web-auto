@@ -30,7 +30,7 @@ async function saveCookies(data) {
 async function run(config = {}) {
   const email = config.email || process.env.GOGOCS_EMAIL || '504740633@qq.com';
   const password = config.password || process.env.GOGOCS_PASSWORD || 'XA531729';
-  const BASE = 'https://gogocs.xyz';
+  const BASE = 'https://user.gogocs.xyz';
 
   const browser = await chromium.launch({ headless: true });
   const ctx = await browser.newContext({
@@ -166,7 +166,7 @@ async function run(config = {}) {
       console.log('gogocs cookies saved:', cookies.length);
     }
 
-    console.log('All done for gogocs.xyz');
+    console.log('All done for user.gogocs.xyz');
     return { success: true };
   } catch (e) {
     console.error('gogocs Error:', e.message);
