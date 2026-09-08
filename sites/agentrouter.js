@@ -78,49 +78,63 @@ async function doCheckin(page) {
   }
 }
 
+// 在 GitHub 页面上循环处理各状态，直到离开 github.com（回调成功）或超时
 async function handleGitHubLogin(page, GH_USER, GH_PASS) {
-  let url = page.url();
-  console.log(SITE + ': GitHub page: ' + url);
+  let filled = false;
+  for (let i = 0; i < 60; i++) {
+    await sleep(1000);
+    const url = page.url();
+    if (!url.includes('github.com')) {
+      console.log(SITE + ': callback: ' + url);
+      return 'done';
+    }
 
-  // 登录页面
-  if (url.includes('github.com/login') && !url.includes('oauth/authorize')) {
-    console.log(SITE + ': filling GitHub credentials...');
-    await page.locator('input[name="login"]').fill(GH_USER);
-    await page.locator('input[name="password"]').fill(GH_PASS);
-    await page.locator('input[type="submit"], button[type="submit"]').first().click();
-    await sleep(4000);
-    url = page.url();
-    console.log(SITE + ': after login: ' + url);
-    if (url.includes('github.com/login') && !url.includes('oauth')) {
-      const err = await page.evaluate(() => {
-        const e = document.querySelector('.js-flash-error, #login .flash-error');
-        return e ? e.textContent.trim().slice(0, 120) : null;
-      }).catch(() => null);
-      if (err) console.log(SITE + ': GitHub login error: ' + err);
+    if (i % 10 === 0) {
+      const title = await page.title().catch(() => '?');
+      console.log(SITE + ': gh state: ' + url.slice(0, 90) + ' | ' + title.slice(0, 40));
+    }
+
+    // 2FA / 设备验证
+    if (url.includes('/u2f') || url.includes('/two-factor') || url.includes('/verified-device')) {
+      console.log(SITE + ': 2FA/device verification required');
+      return 'needs2fa';
+    }
+
+    // 授权页
+    if (url.includes('/login/oauth/authorize')) {
+      await page.evaluate(() => {
+        const btn = document.querySelector('#js-oauth-authorize-btn') ||
+                    document.querySelector('button[name="authorize"]') ||
+                    document.querySelector('button[type="submit"]') ||
+                    document.querySelector('input[value="Authorize"]');
+        if (btn) btn.click();
+      }).catch(() => {});
+      continue;
+    }
+
+    // 登录页 / 登录失败页（POST /session 失败时 URL 停在 /session）
+    const hasForm = await page.locator('input[name="login"]').count().catch(() => 0);
+    if (hasForm > 0 && !filled) {
+      console.log(SITE + ': filling GitHub credentials...');
+      await page.locator('input[name="login"]').fill(GH_USER);
+      await page.locator('input[name="password"]').fill(GH_PASS);
+      await page.locator('input[type="submit"], button[type="submit"]').first().click();
+      filled = true;
+      continue;
+    }
+
+    // 错误提示
+    const err = await page.evaluate(() => {
+      const e = document.querySelector('.flash-error, .js-flash-error, [role="alert"]');
+      return e ? e.textContent.trim().slice(0, 150) : null;
+    }).catch(() => null);
+    if (err) {
+      console.log(SITE + ': GitHub error: ' + err);
+      return 'login_failed';
     }
   }
-
-  // 2FA
-  if (url.includes('github.com/u2f') || url.includes('github.com/sessions/two-factor') || url.includes('github.com/two-factor')) {
-    console.log(SITE + ': 2FA detected, cannot proceed automatically');
-    return 'needs2fa';
-  }
-
-  // 授权页面
-  if (url.includes('/login/oauth/authorize')) {
-    console.log(SITE + ': clicking authorize...');
-    await sleep(1000);
-    await page.evaluate(() => {
-      const btn = document.querySelector('#js-oauth-authorize-btn') ||
-                  document.querySelector('button[name="authorize"]') ||
-                  document.querySelector('button[type="submit"]') ||
-                  document.querySelector('input[value="Authorize"]');
-      if (btn) btn.click();
-    }).catch(() => {});
-    await sleep(3000);
-  }
-
-  return 'ok';
+  console.log(SITE + ': github flow timeout, url: ' + page.url());
+  return 'timeout';
 }
 
 // 点击 GitHub 登录按钮；站点可能用 window.open 在新标签页打开 OAuth，必须捕获 popup
@@ -175,18 +189,6 @@ async function startOAuth(page, ctx) {
   return null;
 }
 
-async function waitForCallback(oauthPage, maxSeconds) {
-  for (let i = 0; i < maxSeconds; i++) {
-    await sleep(1000);
-    const url = oauthPage.url();
-    if (!url.includes('github.com')) {
-      console.log(SITE + ': callback: ' + url);
-      return true;
-    }
-  }
-  return false;
-}
-
 async function run(config) {
   const GH_USER = process.env.GH_USER || 'REDACTED';
   const GH_PASS = process.env.GH_PASS || 'REDACTED';
@@ -236,14 +238,11 @@ async function run(config) {
         console.log(SITE + ': OAuth skipped');
       } else {
         const ghResult = await handleGitHubLogin(oauthPage, GH_USER, GH_PASS);
+        console.log(SITE + ': github flow: ' + ghResult);
         if (ghResult === 'needs2fa') {
           await saveGitHubCookies(ctx);
           return { success: true, checkinSuccess: false, needsU2F: true };
         }
-        // 等待 OAuth 页离开 github.com（回调完成，session 写入共享 context）
-        const back = await waitForCallback(oauthPage, 40);
-        if (!back) console.log(SITE + ': callback timeout, url: ' + oauthPage.url());
-        await sleep(2000);
       }
 
       // 验证登录
