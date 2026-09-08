@@ -242,11 +242,18 @@ async function startOAuth(page, ctx) {
   }
   // 兜底2：通过后端 state 接口构造 OAuth URL（按钮 JS 未生效时）
   try {
-    const state = await page.evaluate(async () => {
-      const r = await fetch('/api/oauth/github/state', { credentials: 'include' });
-      const j = await r.json();
-      return j.data || j.state || null;
+    const stResp = await page.evaluate(async () => {
+      try {
+        const r = await fetch('/api/oauth/github/state', { credentials: 'include' });
+        return r.status + ':' + (await r.text()).slice(0, 200);
+      } catch (e) { return 'ERR:' + e.message; }
     });
+    console.log(SITE + ': state api: ' + stResp);
+    let state = null;
+    try {
+      const j = JSON.parse(stResp.replace(/^d+:/, ''));
+      state = j.data || j.state || null;
+    } catch {}
     if (state) {
       const authUrl = 'https://github.com/login/oauth/authorize?client_id=' + 'Ov23liwqF4o0LXkK2yGg' + '&scope=user:email&state=' + encodeURIComponent(state);
       console.log(SITE + ': state fallback goto github');
