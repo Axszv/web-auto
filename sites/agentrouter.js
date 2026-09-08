@@ -97,22 +97,31 @@ async function handleGitHubLogin(page, GH_USER, GH_PASS, GH_TOTP_SECRET) {
 
     // 2FA / 设备验证
     if (url.includes('/u2f') || url.includes('/two-factor') || url.includes('/verified-device')) {
-      if (GH_TOTP_SECRET && !url.includes('/verified-device')) {
-        // TOTP 验证码页：自动填入当前验证码
-        const hasTotpField = await page.locator('#otp, input[name="otp"], input[autocomplete="one-time-code"]').count().catch(() => 0);
-        if (hasTotpField > 0) {
-          // 取整分钟边界附近的码避免临近过期，若剩余 <5s 用下一个时间窗
-          const now = Math.floor(Date.now() / 1000);
-          const remain = 30 - (now % 30);
-          const code = totp(GH_TOTP_SECRET, remain < 5 ? now + 30 : now);
-          console.log(SITE + ': filling TOTP code');
-          await page.locator('#otp, input[name="otp"], input[autocomplete="one-time-code"]').first().fill(code);
-          await page.locator('button[type="submit"], input[type="submit"]').first().click().catch(() => {});
-          filled = false; // 2FA 提交后可能回登录页，允许重新填账号
-          continue;
-        }
+      if (url.includes('/verified-device')) {
+        console.log(SITE + ': device verification (email code) required: ' + url);
+        return 'needs2fa';
       }
-      console.log(SITE + ': 2FA/device verification required');
+      // TOTP 验证码页：等待输入框渲染后自动填入当前验证码
+      if (GH_TOTP_SECRET) {
+        const sel = '#otp, input[name="otp"], input[autocomplete="one-time-code"]';
+        for (let w = 0; w < 15; w++) {
+          const hasTotpField = await page.locator(sel).count().catch(() => 0);
+          if (hasTotpField > 0) {
+            // 取整分钟边界附近的码避免临近过期，若剩余 <5s 用下一个时间窗
+            const now = Math.floor(Date.now() / 1000);
+            const remain = 30 - (now % 30);
+            const code = totp(GH_TOTP_SECRET, remain < 5 ? now + 30 : now);
+            console.log(SITE + ': filling TOTP code');
+            await page.locator(sel).first().fill(code);
+            await page.locator('button[type="submit"], input[type="submit"]').first().click().catch(() => {});
+            filled = false; // 2FA 提交后可能回登录页，允许重新填账号
+            break;
+          }
+          await sleep(1000);
+        }
+        continue;
+      }
+      console.log(SITE + ': 2FA required but no TOTP secret');
       return 'needs2fa';
     }
 
