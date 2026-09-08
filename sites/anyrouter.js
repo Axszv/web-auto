@@ -42,10 +42,19 @@ async function saveGitHubCookies(ctx) {
 async function checkLogin(page) {
   try {
     const r = await page.evaluate(async () => {
-      const resp = await fetch('/api/user/info', { credentials: 'include' });
-      return { status: resp.status, ok: resp.ok };
+      const out = {};
+      for (const ep of ['/api/user/self', '/api/user/info']) {
+        try {
+          const resp = await fetch(ep, { credentials: 'include' });
+          const body = await resp.text();
+          out[ep] = resp.status + ':' + body.slice(0, 100);
+          if (resp.ok) return { ok: true, status: resp.status, ep, body: body.slice(0, 100) };
+        } catch (e) { out[ep] = 'ERR:' + e.message; }
+      }
+      return { ok: false, detail: out };
     });
-    return r.ok && r.status !== 401;
+    console.log(SITE + ': checkLogin: ' + JSON.stringify(r).substring(0, 260));
+    return r.ok === true;
   } catch { return false; }
 }
 
@@ -53,28 +62,22 @@ async function doCheckin(page) {
   try {
     const result = await page.evaluate(async () => {
       const out = {};
-      try {
-        const r1 = await fetch('/api/user/checkin', { method: 'POST', credentials: 'include' });
-        out.api = { status: r1.status, body: await r1.text() };
-      } catch (e) { out.apiError = e.message; }
-      if (out.api && out.api.status !== 404) return out;
-      try {
-        const r2 = await fetch('/checkin', { method: 'POST', credentials: 'include' });
-        out.legacy = { status: r2.status, body: await r2.text() };
-      } catch (e) { out.legacyError = e.message; }
+      for (const ep of ['/api/user/check_in', '/api/user/checkin', '/api/checkin', '/checkin']) {
+        try {
+          const r = await fetch(ep, { method: 'POST', credentials: 'include' });
+          const body = await r.text();
+          out[ep] = r.status + ':' + body.slice(0, 150);
+          if (r.status !== 404 && r.status !== 405) break;
+        } catch (e) { out[ep] = 'ERR:' + e.message; }
+      }
       return out;
     });
-    console.log(SITE + ': checkin:', JSON.stringify(result).substring(0, 400));
-    const bodies = [result.api, result.legacy].filter(Boolean);
-    for (const b of bodies) {
-      try {
-        const j = JSON.parse(b.body);
-        if (j.code === 200 || j.success === true) return true;
-      } catch {}
-    }
+    console.log(SITE + ': checkin: ' + JSON.stringify(result).substring(0, 500));
+    const text = JSON.stringify(result);
+    if (text.includes('已经') || text.includes('already') || text.includes('"code":200') || text.includes('"success":true')) return true;
     return false;
   } catch (e) {
-    console.log(SITE + ': checkin error:', e.message);
+    console.log(SITE + ': checkin error: ' + e.message);
     return false;
   }
 }
@@ -237,6 +240,22 @@ async function startOAuth(page, ctx) {
     await page.goto(href.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
     if (page.url().includes('github.com')) return page;
   }
+  // 兜底2：通过后端 state 接口构造 OAuth URL（按钮 JS 未生效时）
+  try {
+    const state = await page.evaluate(async () => {
+      const r = await fetch('/api/oauth/github/state', { credentials: 'include' });
+      const j = await r.json();
+      return j.data || j.state || null;
+    });
+    if (state) {
+      const authUrl = 'https://github.com/login/oauth/authorize?client_id=' + 'Ov23lidtiR4LeVZvVRNL' + '&scope=user:email&state=' + encodeURIComponent(state);
+      console.log(SITE + ': state fallback goto github');
+      await page.goto(authUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      if (page.url().includes('github.com')) return page;
+    }
+  } catch (e) {
+    console.log(SITE + ': state fallback failed: ' + e.message);
+  }
   console.log(SITE + ': no navigation to github.com detected');
   return null;
 }
@@ -306,7 +325,9 @@ async function run(config) {
         }
       }
 
-      // 验证登录（回调后 session 需要时间生效，重试几次）
+      // 回调后打开控制台页让 session 生效，再验证登录
+      await page.goto(BASE + '/console', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      await sleep(3000);
       for (let v = 0; v < 5 && !loggedIn; v++) {
         await sleep(2000);
         loggedIn = await checkLogin(page);
