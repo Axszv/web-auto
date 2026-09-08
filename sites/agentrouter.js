@@ -234,7 +234,7 @@ async function startOAuth(page, ctx) {
       return j.data || j.state || null;
     });
     if (state) {
-      const authUrl = 'https://github.com/login/oauth/authorize?client_id=' + 'Ov23liwqF4o0LXkK2yGg' + '&scope=user:email&state=' + encodeURIComponent(state);
+      const authUrl = 'https://github.com/login/oauth/authorize?client_id=' + 'Ov23lidtiR4LeVZvVRNL' + '&scope=user:email&state=' + encodeURIComponent(state);
       console.log(SITE + ': state fallback goto github');
       await page.goto(authUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
       if (page.url().includes('github.com')) return page;
