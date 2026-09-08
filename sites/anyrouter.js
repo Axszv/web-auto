@@ -96,6 +96,7 @@ async function waitForCloudflare(page) {
 // 在 GitHub 页面上循环处理各状态，直到离开 github.com（回调成功）或超时
 async function handleGitHubLogin(page, GH_USER, GH_PASS, GH_TOTP_SECRET) {
   let filled = false;
+  let totpTried = false;
   for (let i = 0; i < 60; i++) {
     await sleep(1000);
     const url = page.url();
@@ -111,22 +112,43 @@ async function handleGitHubLogin(page, GH_USER, GH_PASS, GH_TOTP_SECRET) {
 
     // 2FA / 设备验证
     if (url.includes('/u2f') || url.includes('/two-factor') || url.includes('/verified-device')) {
-      if (GH_TOTP_SECRET && !url.includes('/verified-device')) {
-        // TOTP 验证码页：自动填入当前验证码
-        const hasTotpField = await page.locator('#otp, input[name="otp"], input[autocomplete="one-time-code"]').count().catch(() => 0);
-        if (hasTotpField > 0) {
-          // 取整分钟边界附近的码避免临近过期，若剩余 <5s 用下一个时间窗
-          const now = Math.floor(Date.now() / 1000);
-          const remain = 30 - (now % 30);
-          const code = totp(GH_TOTP_SECRET, remain < 5 ? now + 30 : now);
-          console.log(SITE + ': filling TOTP code');
-          await page.locator('#otp, input[name="otp"], input[autocomplete="one-time-code"]').first().fill(code);
-          await page.locator('button[type="submit"], input[type="submit"]').first().click().catch(() => {});
-          filled = false; // 2FA 提交后可能回登录页，允许重新填账号
-          continue;
-        }
+      if (url.includes('/verified-device')) {
+        console.log(SITE + ': device verification (email code) required: ' + url);
+        return 'needs2fa';
       }
-      console.log(SITE + ': 2FA/device verification required');
+      // TOTP 验证码页：等待输入框渲染后自动填入当前验证码
+      if (GH_TOTP_SECRET && !totpTried) {
+        totpTried = true;
+        // GitHub 新旧版 2FA 页选择器兼容
+        const sel = '#otp, #totp, input[name="otp"], input[name="totp"], input[autocomplete="one-time-code"], input[inputmode="numeric"]';
+        let filledOtp = false;
+        for (let w = 0; w < 20; w++) {
+          const cnt = await page.locator(sel).count().catch(() => 0);
+          if (cnt > 0) {
+            // 取整分钟边界附近的码避免临近过期，若剩余 <5s 用下一个时间窗
+            const now = Math.floor(Date.now() / 1000);
+            const remain = 30 - (now % 30);
+            const code = totp(GH_TOTP_SECRET, remain < 5 ? now + 30 : now);
+            console.log(SITE + ': filling TOTP code');
+            await page.locator(sel).first().fill(code).catch(() => {});
+            await page.locator('button[type="submit"], input[type="submit"]').first().click().catch(() => {});
+            filledOtp = true;
+            break;
+          }
+          await sleep(1000);
+        }
+        if (!filledOtp) {
+          // 诊断：列出页面上所有输入框和按钮
+          const inputs = await page.evaluate(() =>
+            Array.from(document.querySelectorAll('input, button[type="submit"]'))
+              .map(el => ({ tag: el.tagName, type: el.type, id: el.id, name: el.name, ac: el.getAttribute('autocomplete'), im: el.getAttribute('inputmode') }))
+          ).catch(() => []);
+          console.log(SITE + ': TOTP field NOT found. inputs: ' + JSON.stringify(inputs));
+          return 'needs2fa';
+        }
+        continue;
+      }
+      console.log(SITE + ': 2FA required but no TOTP secret');
       return 'needs2fa';
     }
 
@@ -284,8 +306,11 @@ async function run(config) {
         }
       }
 
-      // 验证登录
-      loggedIn = await checkLogin(page);
+      // 验证登录（回调后 session 需要时间生效，重试几次）
+      for (let v = 0; v < 5 && !loggedIn; v++) {
+        await sleep(2000);
+        loggedIn = await checkLogin(page);
+      }
       console.log(SITE + ': login result = ' + loggedIn);
     }
 

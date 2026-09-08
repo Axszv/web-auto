@@ -284,8 +284,11 @@ async function run(config) {
         }
       }
 
-      // 验证登录
-      loggedIn = await checkLogin(page);
+      // 验证登录（回调后 session 需要时间生效，重试几次）
+      for (let v = 0; v < 5 && !loggedIn; v++) {
+        await sleep(2000);
+        loggedIn = await checkLogin(page);
+      }
       console.log(SITE + ': login result = ' + loggedIn);
     }
 
