@@ -2,6 +2,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { totp } = require('../lib/totp');
 
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -79,7 +80,7 @@ async function doCheckin(page) {
 }
 
 // 在 GitHub 页面上循环处理各状态，直到离开 github.com（回调成功）或超时
-async function handleGitHubLogin(page, GH_USER, GH_PASS) {
+async function handleGitHubLogin(page, GH_USER, GH_PASS, GH_TOTP_SECRET) {
   let filled = false;
   for (let i = 0; i < 60; i++) {
     await sleep(1000);
@@ -96,6 +97,21 @@ async function handleGitHubLogin(page, GH_USER, GH_PASS) {
 
     // 2FA / 设备验证
     if (url.includes('/u2f') || url.includes('/two-factor') || url.includes('/verified-device')) {
+      if (GH_TOTP_SECRET && !url.includes('/verified-device')) {
+        // TOTP 验证码页：自动填入当前验证码
+        const hasTotpField = await page.locator('#otp, input[name="otp"], input[autocomplete="one-time-code"]').count().catch(() => 0);
+        if (hasTotpField > 0) {
+          // 取整分钟边界附近的码避免临近过期，若剩余 <5s 用下一个时间窗
+          const now = Math.floor(Date.now() / 1000);
+          const remain = 30 - (now % 30);
+          const code = totp(GH_TOTP_SECRET, remain < 5 ? now + 30 : now);
+          console.log(SITE + ': filling TOTP code');
+          await page.locator('#otp, input[name="otp"], input[autocomplete="one-time-code"]').first().fill(code);
+          await page.locator('button[type="submit"], input[type="submit"]').first().click().catch(() => {});
+          filled = false; // 2FA 提交后可能回登录页，允许重新填账号
+          continue;
+        }
+      }
       console.log(SITE + ': 2FA/device verification required');
       return 'needs2fa';
     }
@@ -192,6 +208,7 @@ async function startOAuth(page, ctx) {
 async function run(config) {
   const GH_USER = process.env.GH_USER || 'REDACTED';
   const GH_PASS = process.env.GH_PASS || 'REDACTED';
+  const GH_TOTP_SECRET = process.env.GH_TOTP_SECRET || 'REDACTED';
   const isHeadless = !process.env.DISPLAY;
   const PROXY = { server: 'http://127.0.0.1:1080' };
 
@@ -237,7 +254,7 @@ async function run(config) {
       if (!oauthPage) {
         console.log(SITE + ': OAuth skipped');
       } else {
-        const ghResult = await handleGitHubLogin(oauthPage, GH_USER, GH_PASS);
+        const ghResult = await handleGitHubLogin(oauthPage, GH_USER, GH_PASS, GH_TOTP_SECRET);
         console.log(SITE + ': github flow: ' + ghResult);
         if (ghResult === 'needs2fa') {
           await saveGitHubCookies(ctx);

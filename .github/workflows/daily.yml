@@ -64,6 +64,7 @@ jobs:
           DISPLAY: :99
           GH_USER: ${{ secrets.GH_USER }}
           GH_PASS: ${{ secrets.GH_PASS }}
+          GH_TOTP_SECRET: ${{ secrets.GH_TOTP_SECRET }}
 
       - name: Kill sing-box
         if: always()
