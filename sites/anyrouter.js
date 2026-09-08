@@ -42,39 +42,55 @@ async function saveGitHubCookies(ctx) {
 async function checkLogin(page) {
   try {
     const r = await page.evaluate(async () => {
-      const out = {};
-      for (const ep of ['/api/user/self', '/api/user/info']) {
-        try {
-          const resp = await fetch(ep, { credentials: 'include' });
-          const body = await resp.text();
-          out[ep] = resp.status + ':' + body.slice(0, 100);
-          if (resp.ok) return { ok: true, status: resp.status, ep, body: body.slice(0, 100) };
-        } catch (e) { out[ep] = 'ERR:' + e.message; }
-      }
-      return { ok: false, detail: out };
+      try {
+        // new-api 前端把用户存在 localStorage，API 需要 New-Api-User 头
+        const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
+        const headers = uid ? { 'New-Api-User': String(uid) } : {};
+        const resp = await fetch('/api/user/self', { credentials: 'include', headers });
+        const body = await resp.text();
+        let ok = false;
+        try { const j = JSON.parse(body); ok = resp.status === 200 && j.success === true; } catch {}
+        return { status: resp.status, ok, body: body.slice(0, 120) };
+      } catch (e) { return { status: 0, ok: false, body: 'ERR:' + e.message }; }
     });
-    console.log(SITE + ': checkLogin: ' + JSON.stringify(r).substring(0, 260));
+    if (!r.ok) console.log(SITE + ': checkLogin: ' + r.status + ':' + r.body);
     return r.ok === true;
   } catch { return false; }
 }
 
 async function doCheckin(page) {
   try {
-    const result = await page.evaluate(async () => {
-      const out = {};
-      for (const ep of ['/api/user/check_in', '/api/user/checkin', '/api/checkin', '/checkin']) {
-        try {
-          const r = await fetch(ep, { method: 'POST', credentials: 'include' });
-          const body = await r.text();
-          out[ep] = r.status + ':' + body.slice(0, 150);
-          if (r.status !== 404 && r.status !== 405) break;
-        } catch (e) { out[ep] = 'ERR:' + e.message; }
-      }
-      return out;
+    // new-api 架构：登录时后端自动处理每日签到（响应 checked_in 字段），无独立签到接口
+    // 这里读取用户信息确认登录态和当前额度
+    const r = await page.evaluate(async () => {
+      try {
+        const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
+        const headers = uid ? { 'New-Api-User': String(uid) } : {};
+        const resp = await fetch('/api/user/self', { credentials: 'include', headers });
+        const j = await resp.json().catch(() => null);
+        if (j && j.success && j.data) {
+          return { ok: true, quota: j.data.quota, used: j.data.used_quota, checkedIn: !!j.data.checked_in };
+        }
+        return { ok: false, status: resp.status };
+      } catch (e) { return { ok: false, err: e.message }; }
     });
-    console.log(SITE + ': checkin: ' + JSON.stringify(result).substring(0, 500));
-    const text = JSON.stringify(result);
-    if (text.includes('已经') || text.includes('already') || text.includes('"code":200') || text.includes('"success":true')) return true;
+    console.log(SITE + ': user info: ' + JSON.stringify(r));
+    if (r.ok && (r.checkedIn || r.quota > 0)) return true;
+    // 兜底尝试旧版签到端点
+    const legacy = await page.evaluate(async () => {
+      const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
+      const headers = uid ? { 'New-Api-User': String(uid) } : {};
+      for (const ep of ['/api/user/check_in', '/api/user/clock_in']) {
+        try {
+          const rr = await fetch(ep, { method: 'POST', credentials: 'include', headers });
+          if (rr.status === 404) continue;
+          const body = await rr.text();
+          return ep + ':' + rr.status + ':' + body.slice(0, 120);
+        } catch {}
+      }
+      return 'no-endpoint';
+    });
+    console.log(SITE + ': legacy checkin: ' + legacy);
     return false;
   } catch (e) {
     console.log(SITE + ': checkin error: ' + e.message);
@@ -241,23 +257,29 @@ async function startOAuth(page, ctx) {
     await page.goto(href.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
     if (page.url().includes('github.com')) return page;
   }
-  // 兜底2：通过后端 state 接口构造 OAuth URL（按钮 JS 未生效时）
+  // 兜底2：模拟前端 OAuth 流程（GET /api/oauth/state?mode=login + window.open）
   try {
-    const stResp = await page.evaluate(async () => {
+    const oauthData = await page.evaluate(async () => {
       try {
-        const r = await fetch('/api/oauth/github/state', { credentials: 'include' });
-        return r.status + ':' + (await r.text()).slice(0, 200);
+        const r = await fetch('/api/oauth/state?mode=login', { credentials: 'include' });
+        const txt = await r.text();
+        if (r.status !== 200) return 'HTTP' + r.status + ':' + txt.slice(0, 150);
+        const j = JSON.parse(txt);
+        if (!j.success) return 'APIFAIL:' + (j.message || '').slice(0, 100);
+        const st = await fetch('/api/status', { credentials: 'include' }).then(r2 => r2.json()).catch(() => null);
+        const cid = st && st.data ? (st.data.github_client_id || '') : '';
+        return JSON.stringify({ state: j.data, cid });
       } catch (e) { return 'ERR:' + e.message; }
     });
-    console.log(SITE + ': state api: ' + stResp);
-    let state = null;
+    console.log(SITE + ': state api: ' + String(oauthData).slice(0, 200));
+    let state = null, cid = null;
     try {
-      const j = JSON.parse(stResp.replace(/^d+:/, ''));
-      state = j.data || j.state || null;
+      const j = JSON.parse(oauthData);
+      state = j.state; cid = j.cid;
     } catch {}
-    if (state) {
-      const authUrl = 'https://github.com/login/oauth/authorize?client_id=' + 'Ov23liwqF4o0LXkK2yGg' + '&scope=user:email&state=' + encodeURIComponent(state);
-      console.log(SITE + ': state fallback goto github');
+    if (state && cid) {
+      const authUrl = 'https://github.com/login/oauth/authorize?client_id=' + cid + '&state=' + encodeURIComponent(state) + '&scope=user:email';
+      console.log(SITE + ': state fallback goto github (cid=' + cid + ')');
       await page.goto(authUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
       if (page.url().includes('github.com')) return page;
     }
