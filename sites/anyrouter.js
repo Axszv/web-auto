@@ -86,7 +86,8 @@ async function doCheckin(page) {
 async function waitForCloudflare(page) {
   for (let i = 0; i < 30; i++) {
     await sleep(1000);
-    const content = await page.content();
+    let content = '';
+    try { content = await page.content(); } catch { continue; } // 页面导航中取内容会抛异常，跳过本轮
     if (!content.includes('challenge-platform') && !content.includes('cf-browser-verification')) {
       console.log(SITE + ': Cloudflare challenge passed');
       return true;
