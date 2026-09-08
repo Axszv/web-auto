@@ -113,11 +113,40 @@ async function handleGitHubLogin(page, GH_USER, GH_PASS) {
   return 'ok';
 }
 
+// 点击 GitHub 登录按钮：semi-portal 弹层可能拦截指针事件，先 force 点击，失败再用 JS 点击
+async function clickGitHubButton(page) {
+  const loc = page.locator('a[href*="github"], button:has-text("GitHub"), a:has-text("GitHub")').first();
+  if (await loc.count() === 0) {
+    console.log(SITE + ': no GitHub button found');
+    return false;
+  }
+  try {
+    await loc.click({ force: true, timeout: 5000 });
+  } catch {
+    await loc.evaluate(el => el.click());
+  }
+  // 等待跳转到 github.com（点击成功会发起 OAuth 跳转）
+  for (let i = 0; i < 15; i++) {
+    await sleep(1000);
+    if (page.url().includes('github.com')) {
+      console.log(SITE + ': GitHub page: ' + page.url());
+      return true;
+    }
+  }
+  console.log(SITE + ': click did not navigate to github.com');
+  return false;
+}
+
 async function waitForCallback(page, maxSeconds) {
+  // 必须先确认在 github.com 上，再等离开
+  for (let i = 0; i < 10; i++) {
+    if (page.url().includes('github.com')) break;
+    await sleep(1000);
+  }
   for (let i = 0; i < maxSeconds; i++) {
     await sleep(1000);
     const url = page.url();
-    if (!url.includes('github.com')) {
+    if (!url.includes('github.com') && !url.includes('authorize')) {
       console.log(SITE + ': callback: ' + url);
       return true;
     }
@@ -170,46 +199,35 @@ async function run(config) {
     if (!loggedIn) {
       console.log(SITE + ': starting OAuth...');
 
-      // 点击 GitHub 登录按钮（可能在首页或 /login 页）
-      let ghLink = page.locator('a[href*="github"], button:has-text("GitHub"), a:has-text("GitHub")').first();
-      if (await ghLink.count() === 0) {
-        // 尝试访问 /login
+      // GitHub 按钮可能在首页或 /login 页
+      const hasBtn = await page.locator('a[href*="github"], button:has-text("GitHub"), a:has-text("GitHub")').first().count();
+      if (hasBtn === 0) {
         await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
         await waitForCloudflare(page);
         await sleep(2000);
-        ghLink = page.locator('a[href*="github"], button:has-text("GitHub"), a:has-text("GitHub")').first();
       }
 
-      if (await ghLink.count() > 0) {
-        console.log(SITE + ': clicking GitHub login...');
-        await ghLink.click();
-        await sleep(4000);
+      const clicked = await clickGitHubButton(page);
+      if (!clicked) {
+        console.log(SITE + ': OAuth skipped (button not found or no navigation)');
       } else {
-        console.log(SITE + ': looking for GitHub element via JS...');
-        await page.evaluate(() => {
-          const el = document.querySelector('[href*="github.com"], [onclick*="github"]');
-          if (el) el.click();
-        });
-        await sleep(4000);
-      }
+        // 处理 GitHub 页面
+        const ghResult = await handleGitHubLogin(page, GH_USER, GH_PASS);
+        if (ghResult === 'needs2fa') {
+          await saveGitHubCookies(ctx);
+          return { success: true, checkinSuccess: false, needsU2F: true };
+        }
 
-      // 处理 GitHub 页面
-      const ghResult = await handleGitHubLogin(page, GH_USER, GH_PASS);
-      if (ghResult === 'needs2fa') {
-        await saveGitHubCookies(ctx);
-        await ctx.close();
-        return { success: true, checkinSuccess: false, needsU2F: true };
-      }
+        // 等待回调
+        const gotCallback = await waitForCallback(page, 30);
+        if (!gotCallback) {
+          console.log(SITE + ': callback timeout');
+          // 回调超时可能是因为 CF challenge，再等一下
+          await waitForCloudflare(page);
+        }
 
-      // 等待回调
-      const gotCallback = await waitForCallback(page, 30);
-      if (!gotCallback) {
-        console.log(SITE + ': callback timeout');
-        // 回调超时可能是因为 CF challenge，再等一下
-        await waitForCloudflare(page);
+        await sleep(2000);
       }
-
-      await sleep(2000);
 
       // 验证登录
       loggedIn = await checkLogin(page);
