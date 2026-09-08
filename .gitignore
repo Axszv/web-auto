@@ -26,3 +26,4 @@ _agent_login.png
 _temp_profile.txt
 _temp_*_profile/
 "_
+.playwright-state/

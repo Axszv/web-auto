@@ -35,6 +35,12 @@
     }
   ],
   "route": {
+    "rules": [
+      {
+        "domain_suffix": ["github.com", "githubusercontent.com"],
+        "outbound": "direct"
+      }
+    ],
     "final": "vless-out"
   }
 }
