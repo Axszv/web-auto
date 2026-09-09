@@ -319,6 +319,15 @@ async function run(config) {
   });
 
   const page = await ctx.newPage();
+  // 记录 OAuth 期间所有 API 请求，定位签到触发接口
+  const apiLog = [];
+  page.on('request', req => {
+    const u = req.url();
+    if (u.includes('/api/') && !u.includes('challenge-platform')) {
+      apiLog.push(req.method() + ' ' + u.replace(BASE, '').slice(0, 100));
+    }
+  });
+
 
   try {
     // 1. 访问首页，可能有 Cloudflare challenge
@@ -364,6 +373,9 @@ async function run(config) {
       }
       console.log(SITE + ': login result = ' + loggedIn);
     }
+
+
+    if (apiLog.length) console.log(SITE + ': api requests during flow: ' + JSON.stringify(apiLog));
 
     // 4. 签到
     let checkinSuccess = false;

@@ -305,14 +305,6 @@ async function run(config) {
 
   const page = await ctx.newPage();
 
-  // 记录 OAuth 期间所有 API 请求，定位签到触发接口
-  const apiLog = [];
-  page.on('request', req => {
-    const u = req.url();
-    if (u.includes('/api/') && !u.includes('challenge-platform')) {
-      apiLog.push(req.method() + ' ' + u.replace(BASE, '').slice(0, 100));
-    }
-  });
 
   try {
     // 1. 检查登录状态
@@ -357,7 +349,6 @@ async function run(config) {
       checkinSuccess = await doCheckin(page);
     }
 
-    if (apiLog.length) console.log(SITE + ': api requests during flow: ' + JSON.stringify(apiLog));
 
     // 4. 保存 cookies
     await saveSiteCookies(ctx);
