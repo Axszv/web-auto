@@ -60,8 +60,19 @@ async function checkLogin(page) {
 
 async function doCheckin(page) {
   try {
-    // new-api 架构：登录时后端自动处理每日签到（响应 checked_in 字段），无独立签到接口
-    // 这里读取用户信息确认登录态和当前额度
+    // 前端在 OAuth 回调后自动 POST /api/user/sign_in 触发每日签到（+$25），显式调用确保不漏
+    const signin = await page.evaluate(async () => {
+      try {
+        const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
+        const headers = uid ? { 'New-Api-User': String(uid) } : {};
+        const resp = await fetch('/api/user/sign_in', { method: 'POST', credentials: 'include', headers });
+        const body = await resp.text();
+        return { status: resp.status, body: body.slice(0, 200) };
+      } catch (e) { return { status: 0, err: e.message }; }
+    });
+    console.log(SITE + ': sign_in: ' + JSON.stringify(signin));
+
+    // 读取用户信息确认登录态和当前额度
     const r = await page.evaluate(async () => {
       try {
         const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
