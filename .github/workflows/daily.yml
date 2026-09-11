@@ -2,9 +2,9 @@ name: Daily Web Auto
 
 on:
   schedule:
-    # UTC 23:25 = 北京 7:25（实际因 actions 排队延迟约 6 点多—7 点多跑）。
-    # 试探 a-n-y-router.top 签到重置点：旧 20:17 UTC（北京 4:17）太早没涨，若本次涨了可再推迟
-    - cron: '25 23 * * *'
+    # UTC 21:17 = 北京 5:17（原 20:17 延后 1 小时）。actions 排队延迟约 2 小时，实际北京 7 点多跑。
+    # 目的：试探 a-n-y-router.top 签到重置点（旧 20:17 北京 6 点多实际跑没涨）
+    - cron: '17 21 * * *'
   workflow_dispatch:
 
 permissions:
