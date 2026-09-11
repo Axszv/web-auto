@@ -1,10 +1,10 @@
-﻿# 部署到 GitHub Actions
+# 部署到 GitHub Actions
 
 ## 步骤 1: 创建 GitHub 仓库
 
 1. 登录 https://github.com
 2. 点击右上角 + → New repository
-3. 仓库名填 `web-auto`，设为 **Private**（cookies.json 含敏感信息）
+3. 仓库名填 `web-auto`
 4. 不要勾选 "Initialize with README"
 5. 点 Create repository
 
@@ -30,56 +30,43 @@ git push -u origin main
 
 仓库 → Settings → Secrets and variables → Actions → New repository secret
 
-| Secret 名称 | 值 |
-|------------|-----|
-| `GOGOCS_EMAIL` | REDACTED |
-| `GOGOCS_PASSWORD` | REDACTED |
-| `SHAREDCHAT_EMAIL` | REDACTED |
-| `SHAREDCHAT_PASSWORD` | REDACTED |
+| Secret 名称 | 用途 |
+|------------|------|
+| `GH_USER` | GitHub 用户名（OAuth 登录用） |
+| `GH_PASS` | GitHub 密码 |
+| `GH_TOTP_SECRET` | GitHub 2FA 的 base32 密钥（可选，无 2FA 则不填） |
+| `GOGOCS_EMAIL` | gogocs 登录邮箱 |
+| `GOGOCS_PASSWORD` | gogocs 登录密码 |
+| `SINGBOX_CONFIG` | sing-box 代理配置 JSON 全文 |
+| `COOKIES_KEY` | 64 位 hex，用于加解密 cookies.json.enc |
 
-## 步骤 5: 处理 anyrouter 和 agentrouter
+所有凭据一律走 secrets，**禁止写进代码或文档**。
 
-### anyrouter（需要手动完成一次 GitHub OAuth）
+## cookies 的加密持久化
+
+cookies.json（session）运行时从 `COOKIES_KEY` 解密 `cookies.json.enc` 得到，运行结束 auto.js 自动把最新 session 加密回写 `cookies.json.enc` 并提交。仓库里只有密文，密钥只在 secrets 里。
+
+本地手动加解密：
 
 ```powershell
-# 运行登录助手，浏览器会打开并完成 OAuth
-node login-helper.js anyrouter
-# 登录完成后，cookies 自动保存到 cookies.json
-# 推送到 GitHub
-git add cookies.json && git commit -m "add anyrouter cookie" && git push
+# 解密（设置 COOKIES_KEY 环境变量后）
+node lib/crypt-decrypt-cli.js cookies.json.enc cookies.json
+
+# 加密（auto.js 运行时自动做，也可手动）
+node -e "require('./lib/crypt').encryptFile('cookies.json','cookies.json.enc',process.env.COOKIES_KEY)"
 ```
 
-### agentrouter（需要用户名/密码）
-
-如果你知道 agentrouter 的用户名和密码：
-```json
-// config.json 中配置
-{
-  "sites": [{
-    "name": "agentrouter",
-    "config": { "username": "your_email", "password": "your_password" }
-  }]
-}
-```
-
-如果没有用户名密码，只能手动登录：
-```powershell
-node login-helper.js agentrouter
-git add cookies.json && git commit -m "add agentrouter cookie" && git push
-```
-
-## 步骤 6: 首次运行 workflow
+## 步骤 5: 首次运行 workflow
 
 1. 仓库 → Actions → "Daily Web Auto" → Run workflow
 2. 查看日志，确认各站点运行结果
 
 ## 定时设置
 
-Workflow 默认每天 UTC 1:00（北京时间 9:00）自动运行。
+Workflow 默认每天 UTC 21:17（北京时间凌晨 5:17 提交，Actions 排队后约 7 点多实际运行）自动执行。
 
 ## 注意事项
 
-- cookies.json 包含 session 信息，务必使用**私有仓库**
-- anyrouter 的 session cookie 有效期约 30 天，过期后需重新手动登录
-- GitHub Actions 上只有内置 Chromium（无 msedge），anyrouter 的 Cloudflare 绕过可能偶尔失败
-- agentrouter 的 token 不能用于网页登录，需要用户名/密码
+- 所有敏感信息（密码/密钥/代理配置）只存 GitHub Secrets
+- cookies.json 与 singbox.json 已在 .gitignore 中，不会入库
+- a-n-y-router.top 的签到按 UTC 零点重置，agentrouter.org 按北京时间零点重置

@@ -28,8 +28,10 @@ async function saveCookies(data) {
 }
 
 async function run(config = {}) {
-  const email = config.email || process.env.GOGOCS_EMAIL || 'REDACTED';
-  const password = config.password || process.env.GOGOCS_PASSWORD || 'REDACTED';
+  const email = config.email || process.env.GOGOCS_EMAIL;
+  if (!email) throw new Error('GOGOCS_EMAIL env required');
+  const password = config.password || process.env.GOGOCS_PASSWORD;
+  if (!password) throw new Error('GOGOCS_PASSWORD env required');
   const BASE = 'https://user.gogocs.xyz';
 
   const browser = await chromium.launch({ headless: true });

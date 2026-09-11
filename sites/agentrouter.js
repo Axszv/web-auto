@@ -276,9 +276,11 @@ async function startOAuth(page, ctx) {
 }
 
 async function run(config) {
-  const GH_USER = process.env.GH_USER || 'Axszv';
-  const GH_PASS = process.env.GH_PASS || 'REDACTED';
-  const GH_TOTP_SECRET = process.env.GH_TOTP_SECRET || 'REDACTED';
+  const GH_USER = process.env.GH_USER;
+  if (!GH_USER) throw new Error('GH_USER env required');
+  const GH_PASS = process.env.GH_PASS;
+  if (!GH_PASS) throw new Error('GH_PASS env required');
+  const GH_TOTP_SECRET = process.env.GH_TOTP_SECRET || '';
   const isHeadless = !process.env.DISPLAY;
   const PROXY = { server: 'http://127.0.0.1:1080' };
 

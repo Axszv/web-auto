@@ -58,6 +58,17 @@ const sites = [
     await sleep(1500);
   }
 
+  // 运行后把最新 session 加密持久化（密文入库，密钥在 COOKIES_KEY）
+  if (process.env.COOKIES_KEY && fs.existsSync(COOKIE_FILE)) {
+    try {
+      const { encryptFile } = require('./lib/crypt');
+      encryptFile(COOKIE_FILE, path.join(__dirname, 'cookies.json.enc'), process.env.COOKIES_KEY);
+      log.push('cookies.json.enc updated');
+    } catch (e) {
+      log.push('encrypt cookies failed: ' + e.message);
+    }
+  }
+
   log.push('=== Done in ' + (Date.now() - start) + 'ms ===');
   const text = log.join('\n');
   console.log(text);

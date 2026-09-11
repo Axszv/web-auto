@@ -40,6 +40,15 @@ jobs:
           mkdir -p /tmp/sing-box
           tar -xzf /tmp/sing-box.tar.gz -C /tmp/sing-box --strip-components=1
 
+      - name: Restore secrets from environment
+        run: |
+          # 代理配置和 cookies 都走 secret，运行时才落盘
+          echo "$SINGBOX_CONFIG" > singbox.json
+          node lib/crypt-decrypt-cli.js cookies.json.enc cookies.json
+        env:
+          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
+          COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
+
       - name: Setup virtual display
         run: |
           sudo apt-get install -y xvfb
@@ -67,6 +76,7 @@ jobs:
           GH_USER: ${{ secrets.GH_USER }}
           GH_PASS: ${{ secrets.GH_PASS }}
           GH_TOTP_SECRET: ${{ secrets.GH_TOTP_SECRET }}
+          COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
 
       - name: Kill sing-box
         if: always()
@@ -74,11 +84,13 @@ jobs:
           kill $(cat /tmp/singbox.pid) 2>/dev/null || true
           cat /tmp/sing-box.log 2>/dev/null | tail -20 || true
 
-      - name: Commit and push updated cookies
+      - name: Commit and push encrypted cookies
         run: |
-          git config user.email 'REDACTED'
-          git config user.name 'Axszv'
+          # auto.js 运行结束已把 cookies.json 加密为 cookies.json.enc，仓库只存密文
+          rm -f cookies.json singbox.json
+          git config user.email 'actions@users.noreply.github.com'
+          git config user.name 'github-actions'
           git fetch origin main
           git reset --hard origin/main
-          git add cookies.json
-          git diff --cached --quiet && echo 'No cookie changes' || (git commit -m 'chore: update session cookies [skip ci]' && git push)
+          git add cookies.json.enc
+          git diff --cached --quiet && echo 'No cookie changes' || (git commit -m 'chore: update encrypted session cookies [skip ci]' && git push)
