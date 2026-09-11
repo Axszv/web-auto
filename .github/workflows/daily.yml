@@ -2,7 +2,8 @@ name: Daily Web Auto
 
 on:
   schedule:
-    - cron: '17 20 * * *'
+    # UTC 00:25 = 北京 8:25。a-n-y-router.top 的签到按 UTC 零点重置，北京凌晨 6 点跑太早签到日未重置
+    - cron: '25 0 * * *'
   workflow_dispatch:
 
 permissions:
