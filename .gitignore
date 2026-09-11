@@ -31,3 +31,8 @@ cookies.json
 GitHub account.md
 web accopunt.md
 singbox.json
+
+# 敏感截图/二维码等任何凭证图片
+Screenshot_*
+*.jpg
+*.png
