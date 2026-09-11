@@ -77,6 +77,8 @@ jobs:
           GH_PASS: ${{ secrets.GH_PASS }}
           GH_TOTP_SECRET: ${{ secrets.GH_TOTP_SECRET }}
           COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
+          GOGOCS_EMAIL: ${{ secrets.GOGOCS_EMAIL }}
+          GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
 
       - name: Kill sing-box
         if: always()
