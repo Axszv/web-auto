@@ -281,8 +281,7 @@ async function run(config) {
   const GH_PASS = process.env.GH_PASS;
   if (!GH_PASS) throw new Error('GH_PASS env required');
   const GH_TOTP_SECRET = process.env.GH_TOTP_SECRET || '';
-  const isHeadless = !process.env.DISPLAY;
-  const PROXY = { server: 'http://127.0.0.1:1080' };
+  const isHeadless = !process.env.DISPLAY;
 
   console.log(SITE + ': start (headless=' + isHeadless + ')');
   if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -295,8 +294,7 @@ async function run(config) {
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--no-first-run'
-    ],
-    proxy: PROXY,
+    ],
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 }
   });

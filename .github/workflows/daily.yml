@@ -33,20 +33,11 @@ jobs:
       - name: Install system deps for Firefox
         run: npx playwright install-deps firefox
 
-      - name: Download sing-box
-        run: |
-          SINGBOX_VER="1.13.16"
-          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz" -o /tmp/sing-box.tar.gz
-          mkdir -p /tmp/sing-box
-          tar -xzf /tmp/sing-box.tar.gz -C /tmp/sing-box --strip-components=1
-
       - name: Restore secrets from environment
         run: |
-          # 代理配置和 cookies 都走 secret，运行时才落盘
-          echo "$SINGBOX_CONFIG" > singbox.json
+          # cookies 走 secret，运行时才落盘
           node lib/crypt-decrypt-cli.js cookies.json.enc cookies.json
         env:
-          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
           COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
 
       - name: Setup virtual display
@@ -54,20 +45,6 @@ jobs:
           sudo apt-get install -y xvfb
           Xvfb :99 -screen 0 1280x800x24 &
           echo "DISPLAY=:99" >> $GITHUB_ENV
-
-      - name: Start sing-box proxy
-        run: |
-          /tmp/sing-box/sing-box run -c singbox.json > /tmp/sing-box.log 2>&1 &
-          echo $! > /tmp/singbox.pid
-          sleep 3
-          if kill -0 $(cat /tmp/singbox.pid) 2>/dev/null; then
-            echo "sing-box started successfully"
-            curl -s --max-time 5 http://127.0.0.1:1080/ -o /dev/null && echo "proxy port 1080 OK"
-          else
-            echo "sing-box failed to start:"
-            cat /tmp/sing-box.log
-            exit 1
-          fi
 
       - name: Run automation
         run: node auto.js
@@ -80,19 +57,8 @@ jobs:
           GOGOCS_EMAIL: ${{ secrets.GOGOCS_EMAIL }}
           GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
 
-      - name: Kill sing-box
-        if: always()
-        run: |
-          kill $(cat /tmp/singbox.pid) 2>/dev/null || true
-          cat /tmp/sing-box.log 2>/dev/null | tail -20 || true
-
       - name: Commit and push encrypted cookies
         run: |
-          # auto.js 运行结束已把 cookies.json 加密为 cookies.json.enc，仓库只存密文
-          rm -f cookies.json singbox.json
-          git config user.email 'actions@users.noreply.github.com'
-          git config user.name 'github-actions'
-          git fetch origin main
-          git reset --hard origin/main
-          git add cookies.json.enc
-          git diff --cached --quiet && echo 'No cookie changes' || (git commit -m 'chore: update encrypted session cookies [skip ci]' && git push)
+          # 测试分支：跳过回写 cookies，避免污染 main 的加密 cookie
+          rm -f cookies.json
+          echo "test/no-proxy: skipping cookie commit"
