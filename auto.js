@@ -31,6 +31,19 @@ const sites = [
   { name: 'anyrouter', mod: require('./sites/anyrouter') },
 ];
 
+// SITES 环境变量指定本次只跑哪些站（逗号分隔），供拆分的多个 workflow 复用同一入口
+const SITES_FILTER = (process.env.SITES || '').split(',').map(s => s.trim()).filter(Boolean);
+
+// 各站"成功"的定义：
+//   gogocs       —— 取消账户保护 + 改分组完成（脚本返回 success:true）
+//   agentrouter  —— 签到后余额实际增加（checkinSuccess:true）
+//   anyrouter    —— 签到后余额实际增加（checkinSuccess:true）
+function siteSucceeded(name, result) {
+  if (!result) return false;
+  if (name === 'gogocs') return result.success === true;
+  return result.checkinSuccess === true;
+}
+
 (async () => {
   const log = [];
   var hadFailure = false;
@@ -43,16 +56,27 @@ const sites = [
   log.push('Loaded cookies: ' + Object.keys(cookieData).join(', ') || 'none');
   log.push('');
 
-  for (const site of sites) {
+  const toRun = SITES_FILTER.length
+    ? sites.filter(s => SITES_FILTER.includes(s.name))
+    : sites;
+  log.push('Sites this run: ' + toRun.map(s => s.name).join(', '));
+  log.push('');
+
+  for (const site of toRun) {
     const cfg = require('./config.json').sites.find(s => s.name === site.name);
     log.push('--- ' + site.name.toUpperCase() + ' ---');
     try {
       const result = await site.mod.run(cfg ? cfg.config : {});
       log.push('Result: ' + JSON.stringify(result));
-      if (result.success === false && site.name !== 'agentrouter' && site.name !== 'anyrouter') hadFailure = true;
+      // 成功判定按站点语义：gogocs 看取消保护+改组完成，agent/any 看余额是否实际增加
+      if (!siteSucceeded(site.name, result)) {
+        hadFailure = true;
+        log.push('FAIL: ' + site.name + ' did not meet success criteria');
+      }
     } catch (e) {
       log.push('Error: ' + e.message);
-      if (site.name !== 'agentrouter' && site.name !== 'anyrouter') hadFailure = true;
+      hadFailure = true;
+      log.push('FAIL: ' + site.name + ' threw');
     }
     log.push('');
     await sleep(1500);

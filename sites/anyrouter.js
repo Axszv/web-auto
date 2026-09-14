@@ -39,6 +39,33 @@ async function saveGitHubCookies(ctx) {
   }
 }
 
+// 读取当前额度（quota）。new-api 的 /api/user/self 需要 New-Api-User 头
+async function getQuota(page) {
+  return await page.evaluate(async () => {
+    try {
+      const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
+      const headers = uid ? { 'New-Api-User': String(uid) } : {};
+      const resp = await fetch('/api/user/self', { credentials: 'include', headers });
+      const j = await resp.json().catch(() => null);
+      if (j && j.success && j.data && typeof j.data.quota === 'number') return j.data.quota;
+      return null;
+    } catch (e) { return null; }
+  });
+}
+
+// 上次运行持久化的 quota（存在加密的 cookies.json 里，key=_<SITE>_quota）
+async function loadPrevQuota() {
+  const all = await loadCookies();
+  const v = all['_' + SITE + '_quota'];
+  return typeof v === 'number' ? v : null;
+}
+
+async function savePrevQuota(q) {
+  const all = await loadCookies();
+  all['_' + SITE + '_quota'] = q;
+  await saveCookies(all);
+}
+
 async function checkLogin(page) {
   try {
     const r = await page.evaluate(async () => {
@@ -58,9 +85,11 @@ async function checkLogin(page) {
   } catch { return false; }
 }
 
+// 签到成功 = 余额相比上次运行实际增加。
+// .top 前端在 OAuth 回调时自动 POST /api/user/sign_in 发放每日额度；这里再显式补调一次兜底，
+// 然后用当前 quota 与上次持久化值比较判定是否真的到账。
 async function doCheckin(page) {
   try {
-    // 前端在 OAuth 回调后自动 POST /api/user/sign_in 触发每日签到（+$25），显式调用确保不漏
     const signin = await page.evaluate(async () => {
       try {
         const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
@@ -72,37 +101,19 @@ async function doCheckin(page) {
     });
     console.log(SITE + ': sign_in: ' + JSON.stringify(signin));
 
-    // 读取用户信息确认登录态和当前额度
-    const r = await page.evaluate(async () => {
-      try {
-        const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
-        const headers = uid ? { 'New-Api-User': String(uid) } : {};
-        const resp = await fetch('/api/user/self', { credentials: 'include', headers });
-        const j = await resp.json().catch(() => null);
-        if (j && j.success && j.data) {
-          return { ok: true, quota: j.data.quota, used: j.data.used_quota, checkedIn: !!j.data.checked_in };
-        }
-        return { ok: false, status: resp.status };
-      } catch (e) { return { ok: false, err: e.message }; }
-    });
-    console.log(SITE + ': user info: ' + JSON.stringify(r));
-    if (r.ok && (r.checkedIn || r.quota > 0)) return true;
-    // 兜底尝试旧版签到端点
-    const legacy = await page.evaluate(async () => {
-      const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
-      const headers = uid ? { 'New-Api-User': String(uid) } : {};
-      for (const ep of ['/api/user/check_in', '/api/user/clock_in']) {
-        try {
-          const rr = await fetch(ep, { method: 'POST', credentials: 'include', headers });
-          if (rr.status === 404) continue;
-          const body = await rr.text();
-          return ep + ':' + rr.status + ':' + body.slice(0, 120);
-        } catch {}
-      }
-      return 'no-endpoint';
-    });
-    console.log(SITE + ': legacy checkin: ' + legacy);
-    return false;
+    const cur = await getQuota(page);
+    const prev = await loadPrevQuota();
+    console.log(SITE + ': quota prev=' + prev + ' cur=' + cur);
+    if (cur == null) return false;
+    let checkinSuccess;
+    if (prev == null) {
+      console.log(SITE + ': no baseline quota, establishing');
+      checkinSuccess = cur > 0;
+    } else {
+      checkinSuccess = cur > prev;
+    }
+    await savePrevQuota(cur);
+    return checkinSuccess;
   } catch (e) {
     console.log(SITE + ': checkin error: ' + e.message);
     return false;
@@ -308,7 +319,6 @@ async function run(config) {
   if (!GH_PASS) throw new Error('GH_PASS env required');
   const GH_TOTP_SECRET = process.env.GH_TOTP_SECRET || '';
   const isHeadless = !process.env.DISPLAY;
-  const PROXY = { server: 'http://127.0.0.1:1080' };
 
   console.log(SITE + ': start (headless=' + isHeadless + ')');
   if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -322,7 +332,6 @@ async function run(config) {
       '--disable-gpu',
       '--no-first-run'
     ],
-    proxy: PROXY,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 }
   });

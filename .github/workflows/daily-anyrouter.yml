@@ -1,0 +1,67 @@
+name: Daily Web Auto (anyrouter)
+
+on:
+  schedule:
+    # cron 只认 UTC。UTC 22:17 = 北京 06:17 提交，算上 actions 排队延迟实际约北京 08:17 跑，
+    # 跨过 a-n-y-router.top 的 UTC 零点（北京 08:00）签到重置线
+    - cron: '17 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  auto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium firefox
+
+      - name: Install system deps for Firefox
+        run: npx playwright install-deps firefox
+
+      - name: Restore cookies from environment
+        run: node lib/crypt-decrypt-cli.js cookies.json.enc cookies.json
+        env:
+          COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
+
+      - name: Setup virtual display
+        run: |
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1280x800x24 &
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+
+      - name: Run automation
+        run: node auto.js
+        env:
+          SITES: anyrouter
+          DISPLAY: :99
+          GH_USER: ${{ secrets.GH_USER }}
+          GH_PASS: ${{ secrets.GH_PASS }}
+          GH_TOTP_SECRET: ${{ secrets.GH_TOTP_SECRET }}
+          COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
+
+      - name: Commit and push encrypted cookies
+        run: |
+          # 备份密文，reset 到最新 origin/main 后还原，避免刚生成的 cookies.json.enc 被 reset 抹掉
+          cp cookies.json.enc /tmp/cookies.json.enc
+          git config user.email 'actions@users.noreply.github.com'
+          git config user.name 'github-actions'
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/cookies.json.enc cookies.json.enc
+          git add cookies.json.enc
+          git diff --cached --quiet && echo 'No cookie changes' || (git commit -m 'chore: update encrypted session cookies [skip ci]' && git push)

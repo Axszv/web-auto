@@ -1,10 +1,10 @@
-name: Daily Web Auto
+name: Daily Web Auto (gogocs + agentrouter)
 
 on:
   schedule:
-    # UTC 22:17 = 北京 6:17。actions 排队延迟约 1h47m，实际约 UTC 00:04（北京 08:04）跑。
-    # a-n-y-router.top 签到按 UTC 零点重置，需实际执行过 UTC 0 点；agentrouter.org 按北京零点重置。
-    - cron: '17 22 * * *'
+    # cron 只认 UTC。UTC 18:17 = 北京 02:17 提交，算上 actions 排队延迟实际约北京 04:17 跑
+    # （过 gogocs 的北京 04:11 保护点；agentrouter.org 按北京零点重置签到，也已过）
+    - cron: '17 18 * * *'
   workflow_dispatch:
 
 permissions:
@@ -72,6 +72,7 @@ jobs:
       - name: Run automation
         run: node auto.js
         env:
+          SITES: gogocs,agentrouter
           DISPLAY: :99
           GH_USER: ${{ secrets.GH_USER }}
           GH_PASS: ${{ secrets.GH_PASS }}
@@ -88,11 +89,13 @@ jobs:
 
       - name: Commit and push encrypted cookies
         run: |
-          # auto.js 运行结束已把 cookies.json 加密为 cookies.json.enc，仓库只存密文
-          rm -f cookies.json singbox.json
+          # auto.js 已把最新 cookies.json（含各站 _quota 基线）加密为 cookies.json.enc。
+          # 先备份密文，reset 到最新 origin/main 后再还原，避免刚生成的密文被 reset 抹掉。
+          cp cookies.json.enc /tmp/cookies.json.enc
           git config user.email 'actions@users.noreply.github.com'
           git config user.name 'github-actions'
           git fetch origin main
           git reset --hard origin/main
+          cp /tmp/cookies.json.enc cookies.json.enc
           git add cookies.json.enc
           git diff --cached --quiet && echo 'No cookie changes' || (git commit -m 'chore: update encrypted session cookies [skip ci]' && git push)

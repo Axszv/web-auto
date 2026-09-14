@@ -39,6 +39,33 @@ async function saveGitHubCookies(ctx) {
   }
 }
 
+// 读取当前额度（quota）。new-api 的 /api/user/self 需要 New-Api-User 头
+async function getQuota(page) {
+  return await page.evaluate(async () => {
+    try {
+      const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
+      const headers = uid ? { 'New-Api-User': String(uid) } : {};
+      const resp = await fetch('/api/user/self', { credentials: 'include', headers });
+      const j = await resp.json().catch(() => null);
+      if (j && j.success && j.data && typeof j.data.quota === 'number') return j.data.quota;
+      return null;
+    } catch (e) { return null; }
+  });
+}
+
+// 上次运行持久化的 quota（存在加密的 cookies.json 里，key=_<SITE>_quota）
+async function loadPrevQuota() {
+  const all = await loadCookies();
+  const v = all['_' + SITE + '_quota'];
+  return typeof v === 'number' ? v : null;
+}
+
+async function savePrevQuota(q) {
+  const all = await loadCookies();
+  all['_' + SITE + '_quota'] = q;
+  await saveCookies(all);
+}
+
 async function checkLogin(page) {
   try {
     const r = await page.evaluate(async () => {
@@ -58,40 +85,24 @@ async function checkLogin(page) {
   } catch { return false; }
 }
 
+// 签到成功 = 登录/回调后余额相比上次运行实际增加。
+// .org 由后端在登录时自动发放每日额度，故此处只读取当前 quota 与上次持久化值比较。
 async function doCheckin(page) {
   try {
-    // new-api 架构：登录时后端自动处理每日签到（响应 checked_in 字段），无独立签到接口
-    // 这里读取用户信息确认登录态和当前额度
-    const r = await page.evaluate(async () => {
-      try {
-        const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
-        const headers = uid ? { 'New-Api-User': String(uid) } : {};
-        const resp = await fetch('/api/user/self', { credentials: 'include', headers });
-        const j = await resp.json().catch(() => null);
-        if (j && j.success && j.data) {
-          return { ok: true, quota: j.data.quota, used: j.data.used_quota, checkedIn: !!j.data.checked_in };
-        }
-        return { ok: false, status: resp.status };
-      } catch (e) { return { ok: false, err: e.message }; }
-    });
-    console.log(SITE + ': user info: ' + JSON.stringify(r));
-    if (r.ok && (r.checkedIn || r.quota > 0)) return true;
-    // 兜底尝试旧版签到端点
-    const legacy = await page.evaluate(async () => {
-      const uid = JSON.parse(localStorage.getItem('user') || 'null')?.id || '';
-      const headers = uid ? { 'New-Api-User': String(uid) } : {};
-      for (const ep of ['/api/user/check_in', '/api/user/clock_in']) {
-        try {
-          const rr = await fetch(ep, { method: 'POST', credentials: 'include', headers });
-          if (rr.status === 404) continue;
-          const body = await rr.text();
-          return ep + ':' + rr.status + ':' + body.slice(0, 120);
-        } catch {}
-      }
-      return 'no-endpoint';
-    });
-    console.log(SITE + ': legacy checkin: ' + legacy);
-    return false;
+    const cur = await getQuota(page);
+    const prev = await loadPrevQuota();
+    console.log(SITE + ': quota prev=' + prev + ' cur=' + cur);
+    if (cur == null) return false;
+    let checkinSuccess;
+    if (prev == null) {
+      // 首次运行无基线，无法判断增量：视为成功并建立基线，后续运行再严格比较
+      console.log(SITE + ': no baseline quota, establishing');
+      checkinSuccess = cur > 0;
+    } else {
+      checkinSuccess = cur > prev;
+    }
+    await savePrevQuota(cur);
+    return checkinSuccess;
   } catch (e) {
     console.log(SITE + ': checkin error: ' + e.message);
     return false;
