@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   auto:
@@ -16,8 +16,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
       - uses: actions/setup-node@v4
         with:
@@ -40,14 +38,10 @@ jobs:
           mkdir -p /tmp/sing-box
           tar -xzf /tmp/sing-box.tar.gz -C /tmp/sing-box --strip-components=1
 
-      - name: Restore secrets from environment
-        run: |
-          # 代理配置和 cookies 都走 secret，运行时才落盘
-          echo "$SINGBOX_CONFIG" > singbox.json
-          node lib/crypt-decrypt-cli.js cookies.json.enc cookies.json
+      - name: Restore proxy config
+        run: echo "$SINGBOX_CONFIG" > singbox.json
         env:
           SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
-          COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
 
       - name: Setup virtual display
         run: |
@@ -77,7 +71,8 @@ jobs:
           GH_USER: ${{ secrets.GH_USER }}
           GH_PASS: ${{ secrets.GH_PASS }}
           GH_TOTP_SECRET: ${{ secrets.GH_TOTP_SECRET }}
-          COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GOGOCS_EMAIL: ${{ secrets.GOGOCS_EMAIL }}
           GOGOCS_PASSWORD: ${{ secrets.GOGOCS_PASSWORD }}
 
@@ -86,16 +81,3 @@ jobs:
         run: |
           kill $(cat /tmp/singbox.pid) 2>/dev/null || true
           cat /tmp/sing-box.log 2>/dev/null | tail -20 || true
-
-      - name: Commit and push encrypted cookies
-        run: |
-          # auto.js 已把最新 cookies.json（含各站 _quota 基线）加密为 cookies.json.enc。
-          # 先备份密文，reset 到最新 origin/main 后再还原，避免刚生成的密文被 reset 抹掉。
-          cp cookies.json.enc /tmp/cookies.json.enc
-          git config user.email 'actions@users.noreply.github.com'
-          git config user.name 'github-actions'
-          git fetch origin main
-          git reset --hard origin/main
-          cp /tmp/cookies.json.enc cookies.json.enc
-          git add cookies.json.enc
-          git diff --cached --quiet && echo 'No cookie changes' || (git commit -m 'chore: update encrypted session cookies [skip ci]' && git push)

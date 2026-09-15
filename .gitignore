@@ -36,3 +36,6 @@ singbox.json
 Screenshot_*
 *.jpg
 *.png
+cookies.json.enc
+
+.tools/

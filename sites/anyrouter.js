@@ -3,41 +3,13 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const { totp } = require('../lib/totp');
+const baseline = require('../lib/baseline');
 
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 const SITE = 'anyrouter';
 const BASE = 'https://anyrouter.top';
 const STATE_DIR = path.join(__dirname, '..', '.playwright-state', SITE);
-const COOKIE_FILE = path.join(__dirname, '..', 'cookies.json');
-
-async function loadCookies() {
-  try { return JSON.parse(fs.readFileSync(COOKIE_FILE, 'utf8')); } catch { return {}; }
-}
-
-async function saveCookies(all) {
-  fs.writeFileSync(COOKIE_FILE, JSON.stringify(all, null, 2), 'utf8');
-}
-
-async function saveSiteCookies(ctx) {
-  const cookies = await ctx.cookies(BASE);
-  if (cookies.length > 0) {
-    const all = await loadCookies();
-    all[SITE] = cookies;
-    await saveCookies(all);
-    console.log(SITE + ': site cookies saved (' + cookies.length + ')');
-  }
-}
-
-async function saveGitHubCookies(ctx) {
-  const cookies = await ctx.cookies('https://github.com');
-  if (cookies.length > 0) {
-    const all = await loadCookies();
-    all.github = cookies;
-    await saveCookies(all);
-    console.log(SITE + ': GitHub cookies saved (' + cookies.length + ')');
-  }
-}
 
 // 读取当前额度（quota）。new-api 的 /api/user/self 需要 New-Api-User 头
 async function getQuota(page) {
@@ -53,17 +25,13 @@ async function getQuota(page) {
   });
 }
 
-// 上次运行持久化的 quota（存在加密的 cookies.json 里，key=_<SITE>_quota）
+// 上次运行持久化的 quota 基线（存于私有 gist）
 async function loadPrevQuota() {
-  const all = await loadCookies();
-  const v = all['_' + SITE + '_quota'];
-  return typeof v === 'number' ? v : null;
+  return await baseline.get(SITE);
 }
 
 async function savePrevQuota(q) {
-  const all = await loadCookies();
-  all['_' + SITE + '_quota'] = q;
-  await saveCookies(all);
+  return await baseline.set(SITE, q);
 }
 
 async function checkLogin(page) {
@@ -341,14 +309,6 @@ async function run(config) {
   });
 
   const page = await ctx.newPage();
-  // 记录 OAuth 期间所有 API 请求，定位签到触发接口
-  const apiLog = [];
-  page.on('request', req => {
-    const u = req.url();
-    if (u.includes('/api/') && !u.includes('challenge-platform')) {
-      apiLog.push(req.method() + ' ' + u.replace(BASE, '').slice(0, 100));
-    }
-  });
 
 
   try {
@@ -381,7 +341,6 @@ async function run(config) {
         const ghResult = await handleGitHubLogin(oauthPage, GH_USER, GH_PASS, GH_TOTP_SECRET);
         console.log(SITE + ': github flow: ' + ghResult);
         if (ghResult === 'needs2fa') {
-          await saveGitHubCookies(ctx);
           return { success: true, checkinSuccess: false, needsU2F: true };
         }
       }
@@ -396,18 +355,11 @@ async function run(config) {
       console.log(SITE + ': login result = ' + loggedIn);
     }
 
-
-    if (apiLog.length) console.log(SITE + ': api requests during flow: ' + JSON.stringify(apiLog));
-
     // 4. 签到
     let checkinSuccess = false;
     if (loggedIn) {
       checkinSuccess = await doCheckin(page);
     }
-
-    // 5. 保存 cookies
-    await saveSiteCookies(ctx);
-    await saveGitHubCookies(ctx);
 
     return { success: true, checkinSuccess };
   } catch (e) {

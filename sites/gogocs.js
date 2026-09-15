@@ -1,8 +1,6 @@
 // sites/gogocs.js — 无需代理，直接访问
 const crypto = require('crypto');
 const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
 
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -17,16 +15,6 @@ async function solvePow(salt, difficulty, ip, timestamp, originalSignature) {
   return null;
 }
 
-async function loadCookies() {
-  const f = path.join(__dirname, '..', 'cookies.json');
-  if (fs.existsSync(f)) return JSON.parse(fs.readFileSync(f, 'utf8'));
-  return {};
-}
-
-async function saveCookies(data) {
-  fs.writeFileSync(path.join(__dirname, '..', 'cookies.json'), JSON.stringify(data, null, 2), 'utf8');
-}
-
 async function run(config = {}) {
   const email = config.email || process.env.GOGOCS_EMAIL;
   if (!email) throw new Error('GOGOCS_EMAIL env required');
@@ -39,8 +27,6 @@ async function run(config = {}) {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   });
 
-  const saved = await loadCookies();
-  if (saved.gogocs && saved.gogocs.length > 0) await ctx.addCookies(saved.gogocs);
 
   const page = await ctx.newPage();
 
@@ -160,13 +146,6 @@ async function run(config = {}) {
       console.log('gogocs: #group button not found');
     }
 
-    const cookies = await ctx.cookies(BASE);
-    if (cookies.length > 0) {
-      const all = await loadCookies();
-      all.gogocs = cookies;
-      await saveCookies(all);
-      console.log('gogocs cookies saved:', cookies.length);
-    }
 
     console.log('All done for user.gogocs.xyz');
     return { success: true };

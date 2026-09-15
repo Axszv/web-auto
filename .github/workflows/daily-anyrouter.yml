@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   auto:
@@ -16,8 +16,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
       - uses: actions/setup-node@v4
         with:
@@ -33,11 +31,6 @@ jobs:
       - name: Install system deps for Firefox
         run: npx playwright install-deps firefox
 
-      - name: Restore cookies from environment
-        run: node lib/crypt-decrypt-cli.js cookies.json.enc cookies.json
-        env:
-          COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
-
       - name: Setup virtual display
         run: |
           sudo apt-get install -y xvfb
@@ -52,16 +45,5 @@ jobs:
           GH_USER: ${{ secrets.GH_USER }}
           GH_PASS: ${{ secrets.GH_PASS }}
           GH_TOTP_SECRET: ${{ secrets.GH_TOTP_SECRET }}
-          COOKIES_KEY: ${{ secrets.COOKIES_KEY }}
-
-      - name: Commit and push encrypted cookies
-        run: |
-          # 备份密文，reset 到最新 origin/main 后还原，避免刚生成的 cookies.json.enc 被 reset 抹掉
-          cp cookies.json.enc /tmp/cookies.json.enc
-          git config user.email 'actions@users.noreply.github.com'
-          git config user.name 'github-actions'
-          git fetch origin main
-          git reset --hard origin/main
-          cp /tmp/cookies.json.enc cookies.json.enc
-          git add cookies.json.enc
-          git diff --cached --quiet && echo 'No cookie changes' || (git commit -m 'chore: update encrypted session cookies [skip ci]' && git push)
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}

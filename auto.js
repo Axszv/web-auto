@@ -1,21 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const COOKIE_FILE = path.join(__dirname, 'cookies.json');
 const LOG_DIR = path.join(__dirname, 'logs');
 
 async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-
-async function loadCookies() {
-  if (fs.existsSync(COOKIE_FILE)) {
-    return JSON.parse(fs.readFileSync(COOKIE_FILE, 'utf8'));
-  }
-  return {};
-}
-
-async function saveCookies(data) {
-  fs.writeFileSync(COOKIE_FILE, JSON.stringify(data, null, 2), 'utf8');
-}
 
 async function writeLog(log) {
   if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -52,10 +40,6 @@ function siteSucceeded(name, result) {
   log.push('Time: ' + new Date().toISOString());
   log.push('');
 
-  const cookieData = await loadCookies();
-  log.push('Loaded cookies: ' + Object.keys(cookieData).join(', ') || 'none');
-  log.push('');
-
   const toRun = SITES_FILTER.length
     ? sites.filter(s => SITES_FILTER.includes(s.name))
     : sites;
@@ -80,17 +64,6 @@ function siteSucceeded(name, result) {
     }
     log.push('');
     await sleep(1500);
-  }
-
-  // 运行后把最新 session 加密持久化（密文入库，密钥在 COOKIES_KEY）
-  if (process.env.COOKIES_KEY && fs.existsSync(COOKIE_FILE)) {
-    try {
-      const { encryptFile } = require('./lib/crypt');
-      encryptFile(COOKIE_FILE, path.join(__dirname, 'cookies.json.enc'), process.env.COOKIES_KEY);
-      log.push('cookies.json.enc updated');
-    } catch (e) {
-      log.push('encrypt cookies failed: ' + e.message);
-    }
   }
 
   log.push('=== Done in ' + (Date.now() - start) + 'ms ===');
