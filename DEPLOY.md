@@ -24,8 +24,8 @@
 仓库不再回写任何内容到 git，只需一个**能读写 gist 的最小权限 token**：
 
 1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained token**
-2. Repository access 选 **No repositories**（关键：不给任何 repo 权限）
-3. Account permissions → **Gist: Read and write**（仅此一项）
+2. Repository access 选 **Public repositories**（最小权限；web-auto 是私有仓，不在其范围内）
+3. Account permissions → **Gist: Read and write**（仅此一项；gist 权限与 repo 权限相互独立）
 4. 生成并复制，作为 `GIST_TOKEN`
 
 > 不要用带 repo/workflow 权限的全能 token —— 它会被存进 Actions secret，泄露面越大越危险。
