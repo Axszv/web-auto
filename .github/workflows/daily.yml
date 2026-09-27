@@ -2,9 +2,8 @@ name: Daily Web Auto (gogocs + agentrouter)
 
 on:
   schedule:
-    # cron 只认 UTC。UTC 18:17 = 北京 02:17 提交，算上 actions 排队延迟实际约北京 04:17 跑
-    # （过 gogocs 的北京 04:11 保护点；agentrouter.org 按北京零点重置签到，也已过）
-    - cron: '17 18 * * *'
+    # cron 只认 UTC。UTC 01:17 = 北京 09:17 提交（北京 9 点半前后，actions 排队延迟很小）
+    - cron: '17 1 * * *'
   workflow_dispatch:
 
 permissions:

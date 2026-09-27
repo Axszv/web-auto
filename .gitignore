@@ -39,3 +39,8 @@ Screenshot_*
 cookies.json.enc
 
 .tools/
+
+# 本地凭据文件，绝不入库
+github_pat_gist.md
+github_pat*.md
+*token*.md
