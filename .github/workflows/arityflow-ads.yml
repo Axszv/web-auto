@@ -84,7 +84,14 @@ jobs:
             androidboot.redroid_gpu_mode=guest \
             ro.product.model=25060RK16C \
             ro.product.brand=REDMI \
-            ro.product.manufacturer=Xiaomi
+            ro.product.manufacturer=Xiaomi \
+            ro.product.name=Redmi\ K80 \
+            ro.product.device=pudding \
+            ro.build.product=pudding \
+            ro.build.flavor=redmi \
+            ro.build.fingerprint=Xiaomi/pudding/pudding:14/UKQ1.230804.001/V14.0.4.0.UJSCN:user/release-keys \
+            ro.miui.ui.version.name=HyperOS2.0 \
+            ro.product.locale=zh-CN
 
       - name: Wait for Android boot
         shell: bash
