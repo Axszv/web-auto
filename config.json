@@ -2,6 +2,7 @@
   "sites": [
     { "name": "gogocs", "url": "https://user.gogocs.xyz", "enabled": true, "config": {} },
     { "name": "agentrouter", "url": "https://agentrouter.org", "enabled": true, "config": {} },
-    { "name": "anyrouter", "url": "https://anyrouter.top", "enabled": true, "config": {} }
+    { "name": "anyrouter", "url": "https://anyrouter.top", "enabled": true, "config": {} },
+    { "name": "arityflow", "url": "https://qd.arityflow.top", "enabled": true, "config": {} }
   ]
 }

@@ -1,0 +1,46 @@
+name: Daily Web Auto (arityflow)
+
+on:
+  schedule:
+    # cron 只认 UTC。UTC 20:17 = 北京 04:17 提交，算上排队延迟实际约北京 06:17 跑。
+    # arityflow 签到按自然日（服务器时区），跑在凌晨足够。
+    - cron: '17 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium firefox
+
+      - name: Install system deps for Firefox
+        run: npx playwright install-deps firefox
+
+      - name: Setup Python + ddddocr (本地 venv)
+        run: |
+          python3 -m venv venv
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install ddddocr
+
+      - name: Run automation
+        run: node auto.js
+        env:
+          SITES: arityflow
+          ARITYFLOW_USER: ${{ secrets.ARITYFLOW_USER }}
+          ARITYFLOW_PASSWORD: ${{ secrets.ARITYFLOW_PASSWORD }}
+          ARITYFLOW_CODE: ${{ secrets.ARITYFLOW_CODE }}

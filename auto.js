@@ -17,6 +17,7 @@ const sites = [
   { name: 'gogocs', mod: require('./sites/gogocs') },
   { name: 'agentrouter', mod: require('./sites/agentrouter') },
   { name: 'anyrouter', mod: require('./sites/anyrouter') },
+  { name: 'arityflow', mod: require('./sites/arityflow') },
 ];
 
 // SITES 环境变量指定本次只跑哪些站（逗号分隔），供拆分的多个 workflow 复用同一入口
@@ -26,6 +27,7 @@ const SITES_FILTER = (process.env.SITES || '').split(',').map(s => s.trim()).fil
 //   gogocs       —— 取消账户保护 + 改分组完成（脚本返回 success:true）
 //   agentrouter  —— 签到后余额实际增加（checkinSuccess:true）
 //   anyrouter    —— 签到后余额实际增加（checkinSuccess:true）
+//   arityflow    —— 签到成功（checkinSuccess:true；含"今日已签"）
 function siteSucceeded(name, result) {
   if (!result) return false;
   if (name === 'gogocs') return result.success === true;
