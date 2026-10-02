@@ -142,29 +142,37 @@ DEVICE_OAID="$(echo "$OAID_JSON" | node -e "let d='';process.stdin.on('data',c=>
 watched=0
 for round in $(seq 1 "$MAX_ADS"); do
   echo "[ad] ===== round $round/$MAX_ADS ====="
-  echo "[ad] status: $(api_get_quota)"
+  bal_before="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).balance||'')}catch{console.log('')}})" 2>/dev/null)"
+  echo "[ad] balance before: $bal_before"
 
-  # 点「看广告」（CDP 精确定位 button.quota-ad-btn）
-  echo "[ad] click-ad: $(cdp click-ad)"
-  # 轮询等待广告出现：SDK 拉素材可能要几十秒
-  opened=0
-  for i in $(seq 1 30); do
-    sleep 2
-    handle_perm_dialog && continue
-    if ad_is_open; then opened=1; break; fi
+  # 每次点广告可能因 SDK 冷启动拿不到素材，etalien 实测前 2 轮也会失败，需多次重试
+  got=0
+  for attempt in 1 2 3; do
+    echo "[ad] attempt $attempt: $(cdp click-ad)"
+    sleep 5
+    handle_perm_dialog || true
+    # 轮询等待广告浮层出现（最多 60s）
+    opened=0
+    for i in $(seq 1 30); do
+      sleep 2
+      handle_perm_dialog && continue
+      if ad_is_open; then opened=1; break; fi
+    done
+    if [[ "$opened" == "1" ]]; then got=1; break; fi
+    echo "[ad] attempt $attempt: no ad fill, cooling 20s then retry"
+    adb_run input keyevent 4 >/dev/null 2>&1 || true
+    sleep 20
   done
-  screenshot "round${round}-after-tap"
 
-  if [[ "$opened" != "1" ]]; then
-    echo "[ad] ad did not open within 60s (无广告/SDK未出素材)"
-    adb_quick logcat -d 2>/dev/null | grep -iE "no.?bid|no_?fill|no.?ad|RewardVideo|onAdError|onRewardVerify|ad.*fail|mediat|sigmob|gdt|oaid|imei" | tail -40 > "$out/ad-sdk.log" || true
-    echo "[ad] ad-sdk log lines: $(wc -l < "$out/ad-sdk.log" 2>/dev/null || echo 0)"
+  if [[ "$got" != "1" ]]; then
+    echo "[ad] round $round: 3 attempts all got no ad fill"
+    adb_quick logcat -d 2>/dev/null | grep -iE "no.?bid|no_?fill|RewardVideo|onAdError|ad.*fail|sigmob|gdt|oaid|imei" | tail -30 > "$out/ad-sdk-r${round}.log" || true
     screenshot "round${round}-noad"
-    # 冷却 240s 避免频繁重试
     if [[ "$round" -lt "$MAX_ADS" ]]; then echo "[ad] cooldown 240s"; sleep 240; fi
     continue
   fi
 
+  screenshot "round${round}-opened"
   echo "[ad] ad is playing, waiting for completion (up to 90s)"
   for i in $(seq 1 45); do
     sleep 2
@@ -174,9 +182,10 @@ for round in $(seq 1 "$MAX_ADS"); do
   screenshot "round${round}-endcard"
 
   close_ad
-  sleep 6
+  sleep 8
   watched=$((watched+1))
-  echo "[ad] round $round done, ad status: $(api_get_quota)"
+  bal_after="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).balance||'')}catch{console.log('')}})" 2>/dev/null)"
+  echo "[ad] round $round done, balance $bal_before -> $bal_after | ad status: $(api_get_quota)"
 
   if [[ "$round" -lt "$MAX_ADS" ]]; then
     echo "[ad] cooldown 240s"

@@ -109,9 +109,12 @@ async function main() {
       break;
     }
     case 'home-ad-info': {
+      // 返回「看广告 剩 X/3 次」和账户余额，用于判断广告是否真的被消耗/额度是否发放
       out = await evaluate(`(() => {
         const b = document.querySelector('button.quota-ad-btn') || [...document.querySelectorAll('button')].find(x => /看广告/.test(x.innerText));
-        return (b && b.innerText || '').replace(/\\s+/g, ' ');
+        const txt = document.body.innerText || '';
+        const bal = (txt.match(/账户余额[\\s\\S]{0,40}?([\\d.]+)/) || [])[1] || '';
+        return { adBtn: (b && b.innerText || '').replace(/\\s+/g, ' '), balance: bal };
       })()`);
       break;
     }
