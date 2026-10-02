@@ -59,6 +59,41 @@ enter_or_exit_fullscreen() {
   sleep 3
 }
 
+# 激励视频结算需要点 endcard 的行动按钮（快手「立即下载」/抖音「下载」/微信小程序等），
+# 点后等 15 秒才 onVideoRewarded 结算。广告是原生 Activity，uiautomator 能抓到按钮文字。
+click_cta() {
+  adb_quick uiautomator dump "/sdcard/cta.xml" >/dev/null 2>&1 || true
+  local xml; xml="$(adb exec-out cat /sdcard/cta.xml 2>/dev/null)"
+  if [[ -z "$xml" ]]; then
+    echo "[cta] dump 为空（可能全屏 Canvas 渲染），用坐标兜底"
+    adb_run input tap 540 1500 >/dev/null 2>&1 || true   # endcard 中下方按钮典型位置
+    sleep 2
+    return 0
+  fi
+  # 找可点的下载/安装类按钮（含 立即下载/下载/安装/打开/继续/查看）
+  local xy
+  xy="$(node -e "
+    const xml=require('fs').readFileSync(0,'utf8');
+    const re=/<node[^>]*text=\"([^\"]*)\"[^>]*bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"[^>]*\/>/g;
+    let m, hit=null;
+    const kw=/下载|安装|打开|继续|查看|领取/;
+    while((m=re.exec(xml))){
+      const t=m[1];
+      if(kw.test(t)){ hit=[(parseInt(m[2])+parseInt(m[4]))/2,(parseInt(m[3])+parseInt(m[5]))/2]; break; }
+    }
+    if(hit) console.log(Math.round(hit[0])+' '+Math.round(hit[1]));
+  " <<<"$xml" 2>/dev/null)"
+  if [[ -n "$xy" ]]; then
+    echo "[cta] tap $xy"
+    adb_run input tap $xy >/dev/null 2>&1 || true
+  else
+    echo "[cta] 未在 UI 树找到按钮文字，用坐标兜底"
+    adb_run input tap 540 1500 >/dev/null 2>&1 || true
+  fi
+  sleep 2
+  return 0
+}
+
 close_ad() {
   for _ in 1 2 3 4 5; do
     handle_perm_dialog && continue
@@ -192,30 +227,32 @@ for round in $(seq 1 "$MAX_ADS"); do
   # 沉浸式广告顶部有「全屏模式，从顶部下滑」入口页，先下滑进入真正播放
   sleep 3
   enter_or_exit_fullscreen
-  sleep 5
+  sleep 8
+
+  # 激励视频约 30-60s，等它播完进入 endcard
+  echo "[ad] waiting for video to finish (~40s)"
+  sleep 40
+  screenshot "round${round}-endcard"
+
+  # 结算关键：点 endcard 的「立即下载/打开」按钮，再等 15 秒 onVideoRewarded 才发奖
+  echo "[ad] click CTA to settle reward"
+  click_cta
+  sleep 15
 
   # 权威判据：后端 viewed_today 递增 = 奖励已发放（走 runner 侧 Node，不受 WebView 遮挡影响）
   vt_before="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
-  echo "[ad] viewed_today before wait: $vt_before"
+  vt_after="$vt_before"
   rewarded=0
-  for i in $(seq 1 55); do
-    sleep 2
-    handle_perm_dialog && continue
-    vt_now="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
-    if [[ -n "$vt_before" && -n "$vt_now" && "$vt_now" -gt "$vt_before" ]]; then
-      echo "[ad] rewarded! viewed_today $vt_before -> $vt_now"
+  for i in $(seq 1 10); do
+    vt_after="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
+    if [[ -n "$vt_before" && -n "$vt_after" && "$vt_after" -gt "$vt_before" ]]; then
+      echo "[ad] rewarded! viewed_today $vt_before -> $vt_after"
       rewarded=1
       break
     fi
-    # 广告自己关掉了：回 App 读前端次数补判
-    if [[ ! -z "$(resumed_activity)" && "$(resumed_activity)" != *"GrantPermissionsActivity"* ]] \
-       && ! ad_is_open 2>/dev/null; then
-      rem_after="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const m=JSON.parse(d.trim()).adBtn.match(/剩\\s*(\\d+)/);console.log(m?m[1]:'')}catch{console.log('')}})" 2>/dev/null)"
-      echo "[ad] ad closed by itself, remaining now: $rem_after"
-      break
-    fi
+    sleep 3
   done
-  screenshot "round${round}-endcard"
+  screenshot "round${round}-settled"
 
   close_ad
   sleep 8
