@@ -184,6 +184,21 @@ async function main() {
       })`);
       break;
     }
+    case 'tobid-probe': {
+      // 广告 SDK 原生桥 jsBridge.tobid 的方法与状态
+      out = await evaluate(`(() => {
+        const T = window.jsBridge && window.jsBridge.tobid;
+        if (!T) return { exists: false, reason: 'jsBridge.tobid 未注入（可能非原生环境）' };
+        const methods = [];
+        let o = T;
+        while (o && o !== Object.prototype) {
+          Object.getOwnPropertyNames(o).forEach(n => methods.push({ n, type: typeof T[n] }));
+          o = Object.getPrototypeOf(o);
+        }
+        return { exists: true, methods };
+      })()`);
+      break;
+    }
     default:
       out = 'unknown command: ' + cmd;
   }

@@ -132,6 +132,9 @@ fi
 echo "[ad] status: $(cdp status)"
 screenshot "02-after-login"
 
+# 探测原生广告桥 jsBridge.tobid（前端靠它拿广告位、调 reward）
+echo "[ad] tobid probe: $(cdp tobid-probe | head -c 600)"
+
 # 诊断：列出 App 原生桥的全部方法，找广告 SDK 的失败原因查询接口
 echo "[ad] bridge methods: $(cdp bridge-list)"
 echo "[ad] getloadFailMessage: $(cdp call-bridge getloadFailMessage '{}' 2>&1 | head -c 400)"
