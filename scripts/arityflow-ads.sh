@@ -140,13 +140,19 @@ for round in $(seq 1 "$MAX_ADS"); do
 
   # 点「看广告」（CDP 精确定位 button.quota-ad-btn）
   echo "[ad] click-ad: $(cdp click-ad)"
-  sleep 6
-  handle_perm_dialog || true
-  sleep 4
+  # 轮询等待广告出现：SDK 拉素材可能要几十秒
+  opened=0
+  for i in $(seq 1 30); do
+    sleep 2
+    handle_perm_dialog && continue
+    if ad_is_open; then opened=1; break; fi
+  done
   screenshot "round${round}-after-tap"
 
-  if ! ad_is_open; then
-    echo "[ad] ad did not open (无广告/SDK未出素材)"
+  if [[ "$opened" != "1" ]]; then
+    echo "[ad] ad did not open within 60s (无广告/SDK未出素材)"
+    adb_quick logcat -d 2>/dev/null | grep -iE "no.?bid|no_?fill|no.?ad|RewardVideo|onAdError|onRewardVerify|ad.*fail|mediat|sigmob|gdt|oaid|imei" | tail -40 > "$out/ad-sdk.log" || true
+    echo "[ad] ad-sdk log lines: $(wc -l < "$out/ad-sdk.log" 2>/dev/null || echo 0)"
     screenshot "round${round}-noad"
     # 冷却 240s 避免频繁重试
     if [[ "$round" -lt "$MAX_ADS" ]]; then echo "[ad] cooldown 240s"; sleep 240; fi
