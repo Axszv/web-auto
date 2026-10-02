@@ -1,0 +1,121 @@
+name: ArityFlow Daily Ads (Redroid ARM64)
+
+on:
+  schedule:
+    # UTC 01:17 = 北京 09:17。a-n-y-router.top 广告额度 +24.7/次、每天 3 次
+    # 需真实播放（Redroid ARM64 + 伪装真机才有广告素材），纯 HTTP 无法发额度
+    - cron: '17 1 * * *'
+  workflow_dispatch:
+    inputs:
+      max_ads:
+        description: Max ads to watch (0 = only report balance)
+        required: false
+        default: '3'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arityflow-ads
+  cancel-in-progress: false
+
+jobs:
+  ads:
+    # ARM64 原生 runner（免费账号可用），Redroid 容器跑 arm64 Android
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache ArityFlow APK
+        id: apk-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: artifacts/ArityFlow.apk
+          key: arityflow-apk-v130
+
+      - name: Download private APK fixture
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          gh release download arityflow-apk-v130 \
+            --pattern ArityFlow.apk \
+            --dir artifacts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install host tools
+        shell: bash
+        run: |
+          mkdir -p diagnostics
+          sudo apt-get update
+          sudo apt-get install -y adb jq
+          uname -a | tee diagnostics/host.txt
+
+      - name: Enable Android Binder devices
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! sudo modprobe binder_linux; then
+            sudo apt-get install -y "linux-modules-extra-$(uname -r)" || true
+            sudo modprobe binder_linux
+          fi
+
+      - name: Start native ARM64 Redroid (fake Redmi device)
+        env:
+          REDROID_IMAGE: 'redroid/redroid:12.0.0_64only-latest'
+        shell: bash
+        run: |
+          docker pull "$REDROID_IMAGE"
+          docker run -d --name redroid --privileged \
+            -p 5555:5555 \
+            "$REDROID_IMAGE" \
+            androidboot.redroid_width=1080 \
+            androidboot.redroid_height=2400 \
+            androidboot.redroid_dpi=420 \
+            androidboot.redroid_gpu_mode=guest \
+            ro.product.model=25060RK16C \
+            ro.product.brand=REDMI \
+            ro.product.manufacturer=Xiaomi
+
+      - name: Wait for Android boot
+        shell: bash
+        run: bash scripts/redroid-boot.sh diagnostics
+
+      - name: Watch daily rewarded ads
+        env:
+          ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
+          ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
+          ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
+          MAX_ADS: ${{ inputs.max_ads || '3' }}
+        shell: bash
+        run: |
+          if [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then
+            echo "ARITYFLOW_USER / ARITYFLOW_PASSWORD must be set"; exit 1
+          fi
+          set +e
+          timeout --kill-after=15s 80m bash scripts/arityflow-ads.sh \
+            artifacts/ArityFlow.apk diagnostics
+          exit $?
+
+      - name: Save APK cache
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: artifacts/ArityFlow.apk
+          key: arityflow-apk-v130
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arityflow-ads-${{ github.run_id }}
+          path: diagnostics/
+          if-no-files-found: warn
+          retention-days: 7
