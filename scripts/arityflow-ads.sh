@@ -65,8 +65,12 @@ api_get_quota() {
 }
 
 # WebView 页面 uiautomator dump 抓不到内部文字，改用 CDP 直连 WebView DOM 操作。
-cdp() { node "$script_dir/webview-cdp.js" "$SERIAL" "$app_pid" "$@" 2>&1 || true; }
 app_pid() { adb shell pidof "$PKG" 2>/dev/null | tr -d '\r\n'; }
+cdp() {
+  local pid; pid="$(app_pid)"
+  if [[ -z "$pid" ]]; then echo "CDP_ERR:no-pid"; return; fi
+  node "$script_dir/webview-cdp.js" "$SERIAL" "$pid" "$@" 2>&1 || echo "CDP_ERR:node-failed"
+}
 
 echo "[ad] install apk"
 adb install -r -d "$apk" 2>&1 | tee "$out/install.log" | tail -2
