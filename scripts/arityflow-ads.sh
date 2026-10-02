@@ -13,6 +13,9 @@ ACT="com.lt.app.MainActivity"
 MAX_ADS="${MAX_ADS:-3}"
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
 
+# 指定唯一设备（ARM runner 上可能有多设备/残留）
+export ANDROID_SERIAL=127.0.0.1:5555
+
 adb_run()  { adb shell "$@"; }
 adb_quick() { timeout 25s adb shell "$@" 2>/dev/null || true; }
 

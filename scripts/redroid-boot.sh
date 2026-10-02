@@ -6,6 +6,9 @@ out="${1:-diagnostics}"
 container="redroid"
 mkdir -p "$out"
 
+# 指定唯一设备（ARM runner 上可能有多设备/残留）
+export ANDROID_SERIAL=127.0.0.1:5555
+
 for attempt in $(seq 1 60); do
   running="$(docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null || true)"
   boot_completed=""
