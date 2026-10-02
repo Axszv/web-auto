@@ -90,6 +90,13 @@ jobs:
         shell: bash
         run: bash scripts/redroid-boot.sh diagnostics
 
+      - name: Probe OAID support in Redroid
+        shell: bash
+        run: |
+          set +e
+          bash scripts/probe-oaid.sh diagnostics
+          exit 0
+
       - name: Watch daily rewarded ads
         env:
           ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
