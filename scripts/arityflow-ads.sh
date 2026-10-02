@@ -160,27 +160,27 @@ for round in $(seq 1 "$MAX_ADS"); do
   bal_before="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).balance||'')}catch{console.log('')}})" 2>/dev/null)"
   echo "[ad] balance before: $bal_before"
 
-  # 每次点广告可能因 SDK 冷启动拿不到素材，etalien 实测前 2 轮也会失败，需多次重试
+  # 广告素材填充是概率性的（同样环境有时拿到快手广告、有时 12 次全 700000 无广告返回），
+  # 靠高频重试提高命中率；700000 错误通常几秒内就返回，不必等满 60 秒。
   got=0
-  for attempt in 1 2 3 4 5 6 7 8; do
+  for attempt in $(seq 1 20); do
     echo "[ad] attempt $attempt: $(cdp click-ad)"
-    sleep 5
+    sleep 4
     handle_perm_dialog || true
-    # 轮询等待广告浮层出现（最多 60s）
+    # 轮询等待广告浮层出现（最多 25 秒）
     opened=0
-    for i in $(seq 1 30); do
+    for i in $(seq 1 12); do
       sleep 2
       handle_perm_dialog && continue
       if ad_is_open; then opened=1; break; fi
     done
     if [[ "$opened" == "1" ]]; then got=1; break; fi
-    echo "[ad] attempt $attempt: no ad fill, cooling 20s then retry"
     adb_run input keyevent 4 >/dev/null 2>&1 || true
-    sleep 20
+    sleep 8
   done
 
   if [[ "$got" != "1" ]]; then
-    echo "[ad] round $round: 8 attempts all got no ad fill"
+    echo "[ad] round $round: 20 attempts all got no ad fill"
     adb_quick logcat -d 2>/dev/null | grep -iE "no.?bid|no_?fill|RewardVideo|onAdError|ad.*fail|sigmob|gdt|oaid|imei" | tail -30 > "$out/ad-sdk-r${round}.log" || true
     screenshot "round${round}-noad"
     if [[ "$round" -lt "$MAX_ADS" ]]; then echo "[ad] cooldown 240s"; sleep 240; fi
