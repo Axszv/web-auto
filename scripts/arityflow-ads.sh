@@ -52,15 +52,23 @@ handle_perm_dialog() {
   return 0
 }
 
+# 快手/穿山甲等沉浸式广告顶部有「全屏模式，要退出请从顶部向下滑动」入口页，
+# 返回键无效，必须用顶部下滑手势才能进入真正播放或退出
+enter_or_exit_fullscreen() {
+  adb_run input swipe 540 80 540 900 300 >/dev/null 2>&1 || true
+  sleep 3
+}
+
 close_ad() {
-  for _ in 1 2 3 4; do
+  for _ in 1 2 3 4 5; do
     handle_perm_dialog && continue
     adb_run input keyevent 4 >/dev/null 2>&1 || true
-    sleep 4
+    sleep 3
     ad_is_open || return 0
-    # 右上角关闭（1080 宽，比例坐标）
-    adb_run input tap 985 88 >/dev/null 2>&1 || true
-    sleep 4
+    enter_or_exit_fullscreen          # 顶部下滑退出
+    ad_is_open || return 0
+    adb_run input tap 985 88 >/dev/null 2>&1 || true   # 右上角关闭
+    sleep 3
     ad_is_open || return 0
   done
   adb_run input keyevent 3 >/dev/null 2>&1 || true
@@ -181,22 +189,31 @@ for round in $(seq 1 "$MAX_ADS"); do
 
   screenshot "round${round}-opened"
 
-  # 权威判据：前端「看广告 剩 X/3 次」次数减少 = 奖励已发放
-  # 广告视频约 30-60s，需等 onVideoRewarded 触发；每次轮询回 WebView 读次数
-  rem_before="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const m=JSON.parse(d.trim()).adBtn.match(/剩\\s*(\\d+)/);console.log(m?m[1]:'')}catch{console.log('')}})" 2>/dev/null)"
-  echo "[ad] remaining before wait: $rem_before"
+  # 沉浸式广告顶部有「全屏模式，从顶部下滑」入口页，先下滑进入真正播放
+  sleep 3
+  enter_or_exit_fullscreen
+  sleep 5
+
+  # 权威判据：后端 viewed_today 递增 = 奖励已发放（走 runner 侧 Node，不受 WebView 遮挡影响）
+  vt_before="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
+  echo "[ad] viewed_today before wait: $vt_before"
   rewarded=0
-  for i in $(seq 1 60); do
+  for i in $(seq 1 55); do
     sleep 2
     handle_perm_dialog && continue
-    rem_now="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const m=JSON.parse(d.trim()).adBtn.match(/剩\\s*(\\d+)/);console.log(m?m[1]:'')}catch{console.log('')}})" 2>/dev/null)"
-    if [[ -n "$rem_before" && -n "$rem_now" && "$rem_now" -lt "$rem_before" ]]; then
-      echo "[ad] rewarded! remaining $rem_before -> $rem_now"
+    vt_now="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
+    if [[ -n "$vt_before" && -n "$vt_now" && "$vt_now" -gt "$vt_before" ]]; then
+      echo "[ad] rewarded! viewed_today $vt_before -> $vt_now"
       rewarded=1
       break
     fi
-    # 广告自己关了（播完自动关）也算奖励到账，次数会同步减少；再确认一次
-    if [[ $((i % 10)) -eq 0 && -z "$(resumed_activity)" ]]; then break; fi
+    # 广告自己关掉了：回 App 读前端次数补判
+    if [[ ! -z "$(resumed_activity)" && "$(resumed_activity)" != *"GrantPermissionsActivity"* ]] \
+       && ! ad_is_open 2>/dev/null; then
+      rem_after="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const m=JSON.parse(d.trim()).adBtn.match(/剩\\s*(\\d+)/);console.log(m?m[1]:'')}catch{console.log('')}})" 2>/dev/null)"
+      echo "[ad] ad closed by itself, remaining now: $rem_after"
+      break
+    fi
   done
   screenshot "round${round}-endcard"
 
