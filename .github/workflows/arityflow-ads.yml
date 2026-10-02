@@ -68,6 +68,26 @@ jobs:
             sudo modprobe binder_linux
           fi
 
+      - name: Start sing-box (广告平台只对中国 IP 投放素材，runner 在美国机房需走代理)
+        env:
+          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
+        shell: bash
+        run: |
+          echo "$SINGBOX_CONFIG" > singbox.json
+          chmod 600 singbox.json
+          # 二进制从 main 的 daily workflow 复用（同仓库已验证可用）
+          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v1.13.16/sing-box-1.13.16-linux-arm64.tar.gz" -o /tmp/sb.tar.gz
+          mkdir -p /tmp/sing-box && tar -xzf /tmp/sb.tar.gz -C /tmp/sing-box --strip-components=1
+          /tmp/sing-box/sing-box run -c singbox.json > /tmp/sing-box.log 2>&1 &
+          echo $! > /tmp/singbox.pid
+          sleep 4
+          if kill -0 $(cat /tmp/singbox.pid) 2>/dev/null; then
+            echo "sing-box started, port 1080"
+            curl -s --max-time 8 -x http://127.0.0.1:1080 https://ipinfo.io/json | head -c 300 || true
+          else
+            echo "sing-box failed:"; cat /tmp/sing-box.log; exit 1
+          fi
+
       - name: Start native ARM64 Redroid (fake Redmi device)
         env:
           REDROID_IMAGE: 'redroid/redroid:12.0.0_64only-latest'
@@ -89,6 +109,18 @@ jobs:
       - name: Wait for Android boot
         shell: bash
         run: bash scripts/redroid-boot.sh diagnostics
+
+      - name: Route Android through sing-box (中国 IP 才有广告素材)
+        shell: bash
+        run: |
+          # docker bridge 网关即宿主，容器内 sing-box 监听宿主 1080
+          HOST_IP=$(docker inspect redroid --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}')
+          echo "host gateway: $HOST_IP"
+          adb shell settings put global http_proxy "$HOST_IP:1080" | tr -d '\r'
+          sleep 2
+          echo "android proxy: $(adb shell settings get global http_proxy | tr -d '\r')"
+          # 验证容器内能否经代理出网（取出口 IP）
+          adb shell "ping -c1 -W3 223.5.5.5" 2>&1 | tail -2 || true
 
       - name: Watch daily rewarded ads
         env:

@@ -115,6 +115,27 @@ async function main() {
       })()`);
       break;
     }
+    case 'get-oaid': {
+      // 前端把解析出的设备标识缓存在内存，localStorage 的 af_ad_oaid_tip 只是提示标记。
+      // 直接复用前端的解析链（getOAIDv2→getOAID→getIMEI→getDeviceId→getInstallId）
+      out = await evaluate(`(async()=>{
+        const call = (name) => new Promise((resolve)=>{
+          let done=false;
+          const t=setTimeout(()=>{if(!done){done=true;resolve('')}} , 4000);
+          try {
+            window.jsBridge.ready(()=>{
+              window.jsBridge[name](v=>{ if(!done){done=true;clearTimeout(t); resolve(v||'')}});
+            });
+          } catch(e){ if(!done){done=true;clearTimeout(t);resolve('')} }
+        });
+        for(const n of ['getOAIDv2','getOAID','getIMEI','getDeviceId','getInstallId']){
+          const v = await call(n);
+          if(v && v !== 'true' && !/unsupported|error/i.test(v)) return { id: v, source: n };
+        }
+        return { id: '', source: '' };
+      })()`);
+      break;
+    }
     default:
       out = 'unknown command: ' + cmd;
   }

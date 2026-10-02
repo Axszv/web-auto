@@ -132,6 +132,12 @@ fi
 echo "[ad] status: $(cdp status)"
 screenshot "02-after-login"
 
+# 读取本机（Redroid）真实设备标识，供 adcap 查询用；不用真机硬编码值
+OAID_JSON="$(cdp get-oaid)"
+echo "[ad] device id: $OAID_JSON"
+DEVICE_OAID="$(echo "$OAID_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const j=JSON.parse(d.trim());console.log(j.id||'')}catch{console.log('')}})" 2>/dev/null)"
+[[ -n "$DEVICE_OAID" ]] && OAID="$DEVICE_OAID" && echo "[ad] using device oaid: $OAID (source)" || echo "[ad] fallback oaid (真机): $OAID"
+
 
 watched=0
 for round in $(seq 1 "$MAX_ADS"); do
