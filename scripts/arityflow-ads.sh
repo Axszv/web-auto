@@ -89,14 +89,25 @@ done
 pid="$(app_pid)"
 echo "[ad] app pid: $pid"
 
+# 容器内网络连通性诊断（Redroid 能否访问后端 API）
+echo "[ad] net check:"
+adb_quick shell "ping -c1 -W2 8.8.8.8" 2>/dev/null | tail -2 | tee -a "$out/net-check.txt" || true
+adb_quick shell "getprop | grep -iE 'dns|net.eth0'" 2>/dev/null | head -5 | tee -a "$out/net-check.txt" || true
+
 # 关掉"广告权限提示"弹窗（首次启动才有）
 echo "[ad] dismiss tips: $(cdp dismiss-tips)"
 sleep 2
 
-# 登录（若在登录页）
+# 登录（若在登录页）：提交后轮询等待，跳出 #/auth 才算成功
 if [[ "$(cdp status)" == *"hasLogin\":true"* ]]; then
   echo "[ad] login: $(cdp login "$ARITY_USER" "$ARITY_PASS")"
-  sleep 25
+  for i in $(seq 1 30); do
+    sleep 3
+    st="$(cdp status)"
+    [[ "$st" != *"hasLogin\":true"* ]] && break
+    [[ "$i" == "10" ]] && adb_quick logcat -d 2>/dev/null | grep -iE "ERR_|Exception|net::|SSL|UnknownHost" | tail -20 > "$out/login-err.log" || true
+  done
+  echo "[ad] login errors: $(wc -l < "$out/login-err.log" 2>/dev/null || echo 0)"
 fi
 echo "[ad] status: $(cdp status)"
 screenshot "02-after-login"
