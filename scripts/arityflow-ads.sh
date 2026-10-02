@@ -41,6 +41,12 @@ ad_is_open() {
 
 close_ad() {
   for _ in 1 2 3; do
+    # 原生权限弹窗（GrantPermissionsActivity）优先处理：点「WHILE USING THE APP」
+    if [[ "$(resumed_activity)" == *"GrantPermissionsActivity"* ]]; then
+      adb_run input tap 540 1531 >/dev/null 2>&1 || true
+      sleep 3
+      continue
+    fi
     adb_run input keyevent 4 >/dev/null 2>&1 || true
     sleep 4
     ad_is_open || return 0
@@ -74,6 +80,11 @@ cdp() {
 
 echo "[ad] install apk"
 adb install -r -d "$apk" 2>&1 | tee "$out/install.log" | tail -2
+
+# 预授予权限，避免运行时弹原生权限框挡住广告
+for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION READ_PHONE_STATE; do
+  adb_run pm grant "$PKG" "android.permission.$perm" >/dev/null 2>&1 || true
+done
 
 echo "[ad] launch app"
 adb_run am start -n "$PKG/$ACT" 2>&1 | tee "$out/start.log" | tail -2
