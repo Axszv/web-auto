@@ -153,6 +153,37 @@ async function main() {
       })()`);
       break;
     }
+    case 'bridge-list': {
+      // 列出 jsBridge 全部方法（找广告 SDK 相关接口）
+      out = await evaluate(`(() => {
+        const B = window.jsBridge; if (!B) return [];
+        const names = new Set(); let o = B;
+        while (o && o !== Object.prototype) {
+          Object.getOwnPropertyNames(o).forEach(n => { if (typeof B[n] === 'function') names.add(n); });
+          o = Object.getPrototypeOf(o);
+        }
+        return [...names].sort();
+      })()`);
+      break;
+    }
+    case 'call-bridge': {
+      // 调用任意桥方法：call-bridge <method> [jsonArgs]
+      const [method, argStr] = args;
+      out = await evaluate(`new Promise((resolve)=>{
+        let done=false; const t=setTimeout(()=>{if(!done){done=true;resolve('TIMEOUT')}},8000);
+        const done_=(v)=>{if(!done){done=true;clearTimeout(t);resolve(String(v))}};
+        try{
+          window.jsBridge.ready(()=>{
+            const fn = window.jsBridge[${JSON.stringify(method)}];
+            if (typeof fn !== 'function') { done_('NO_METHOD'); return; }
+            const a = ${JSON.stringify(argStr || '')};
+            if (a) { try { fn(JSON.parse(a), done_); } catch(e){ done_('ARG_ERR:'+e.message); } }
+            else { fn(done_); }
+          });
+        }catch(e){ done_('ERR:'+e.message) }
+      })`);
+      break;
+    }
     default:
       out = 'unknown command: ' + cmd;
   }
