@@ -180,19 +180,34 @@ for round in $(seq 1 "$MAX_ADS"); do
   fi
 
   screenshot "round${round}-opened"
-  echo "[ad] ad is playing, waiting for completion (up to 90s)"
-  for i in $(seq 1 45); do
+
+  # 权威判据：前端「看广告 剩 X/3 次」次数减少 = 奖励已发放
+  # 广告视频约 30-60s，需等 onVideoRewarded 触发；每次轮询回 WebView 读次数
+  rem_before="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const m=JSON.parse(d.trim()).adBtn.match(/剩\\s*(\\d+)/);console.log(m?m[1]:'')}catch{console.log('')}})" 2>/dev/null)"
+  echo "[ad] remaining before wait: $rem_before"
+  rewarded=0
+  for i in $(seq 1 60); do
     sleep 2
     handle_perm_dialog && continue
-    ad_is_open || break
+    rem_now="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const m=JSON.parse(d.trim()).adBtn.match(/剩\\s*(\\d+)/);console.log(m?m[1]:'')}catch{console.log('')}})" 2>/dev/null)"
+    if [[ -n "$rem_before" && -n "$rem_now" && "$rem_now" -lt "$rem_before" ]]; then
+      echo "[ad] rewarded! remaining $rem_before -> $rem_now"
+      rewarded=1
+      break
+    fi
+    # 广告自己关了（播完自动关）也算奖励到账，次数会同步减少；再确认一次
+    if [[ $((i % 10)) -eq 0 && -z "$(resumed_activity)" ]]; then break; fi
   done
   screenshot "round${round}-endcard"
 
   close_ad
   sleep 8
-  watched=$((watched+1))
-  bal_after="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).balance||'')}catch{console.log('')}})" 2>/dev/null)"
-  echo "[ad] round $round done, balance $bal_before -> $bal_after | ad status: $(api_get_quota)"
+  if [[ "$rewarded" == "1" ]]; then
+    watched=$((watched+1))
+    echo "[ad] round $round SUCCESS, ad status: $(api_get_quota)"
+  else
+    echo "[ad] round $round: ad played but no reward credited"
+  fi
 
   if [[ "$round" -lt "$MAX_ADS" ]]; then
     echo "[ad] cooldown 240s"
