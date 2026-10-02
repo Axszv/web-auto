@@ -20,7 +20,7 @@ adb_run()  { adb shell "$@"; }
 adb_quick() { timeout 25s adb shell "$@" 2>/dev/null || true; }
 
 screenshot() { adb exec-out screencap -p > "$out/$1.png" 2>/dev/null || true; }
-dump_ui()    { adb_run shell uiautomator dump "/sdcard/$1.xml" >/dev/null 2>&1 || true
+dump_ui()    { adb_run uiautomator dump "/sdcard/$1.xml" >/dev/null 2>&1 || true
                 adb exec-out cat "/sdcard/$1.xml" 2>/dev/null > "$out/$1.xml" || true; }
 
 # 前台 activity（广告 SDK 打开时会切到 SDK 自己的 Activity）
@@ -39,22 +39,27 @@ ad_is_open() {
 
 close_ad() {
   for _ in 1 2 3; do
-    adb_run shell input keyevent 4 >/dev/null 2>&1 || true
+    adb_run input keyevent 4 >/dev/null 2>&1 || true
     sleep 4
     ad_is_open || return 0
     # 右上角关闭（1080 宽，比例坐标）
-    adb_run shell input tap 985 88 >/dev/null 2>&1 || true
+    adb_run input tap 985 88 >/dev/null 2>&1 || true
     sleep 4
     ad_is_open || return 0
   done
-  adb_run shell input keyevent 3 >/dev/null 2>&1 || true
+  adb_run input keyevent 3 >/dev/null 2>&1 || true
   sleep 3
 }
 
 api_get_quota() {
-  adb_quick shell "curl -s -X POST https://af.52kele.cn/adcap/api/quota \
-    -H 'Content-Type: application/json' -d '{\"oaid\":\"$OAID\"}'" 2>/dev/null \
-    | tr -d '\r'
+  # 从 runner 宿主侧查（Redroid 容器内无 curl/wget）
+  node -e "
+    fetch('https://af.52kele.cn/adcap/api/quota', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oaid: '$OAID' })
+    }).then(r => r.text()).then(t => console.log(t)).catch(e => console.log('ERR:' + e.message));
+  " 2>/dev/null
 }
 
 wait_text() {  # 等待某个文本出现在 UI
@@ -73,10 +78,10 @@ echo "[ad] install apk"
 adb install -r -d "$apk" 2>&1 | tee "$out/install.log" | tail -2
 
 echo "[ad] webview check"
-adb_run shell pm list packages 2>/dev/null | grep -iE "webview|chrome" | tee "$out/webview.txt" || echo "(no webview pkg found)"
+adb_run pm list packages 2>/dev/null | grep -iE "webview|chrome" | tee "$out/webview.txt" || echo "(no webview pkg found)"
 
 echo "[ad] launch app"
-adb_run shell am start -n "$PKG/$ACT" 2>&1 | tee "$out/start.log" | tail -2
+adb_run am start -n "$PKG/$ACT" 2>&1 | tee "$out/start.log" | tail -2
 sleep 30
 echo "[ad] resumed: $(resumed_activity)"
 adb_quick shell dumpsys activity activities 2>/dev/null | grep -c "$PKG" > "$out/activity-count.txt" || true
@@ -88,11 +93,11 @@ screenshot "after-launch"
 # 登录（若未登录）
 if wait_text "请输入用户名" 6; then
   echo "[ad] logging in"
-  adb_run shell input text "$ARITY_USER" >/dev/null 2>&1 || true
+  adb_run input text "$ARITY_USER" >/dev/null 2>&1 || true
   sleep 2
-  adb_run shell input text "$ARITY_PASS" >/dev/null 2>&1 || true
+  adb_run input text "$ARITY_PASS" >/dev/null 2>&1 || true
   sleep 2
-  adb_run shell input tap 540 1290 >/dev/null 2>&1 || true  # 登录按钮（中下方）
+  adb_run input tap 540 1290 >/dev/null 2>&1 || true  # 登录按钮（中下方）
   sleep 20
 fi
 screenshot "after-login"
@@ -107,7 +112,7 @@ for round in $(seq 1 "$MAX_ADS"); do
   fi
 
   # 点「看广告」
-  adb_run shell input tap 300 670 >/dev/null 2>&1 || true
+  adb_run input tap 300 670 >/dev/null 2>&1 || true
   sleep 8
 
   if ! ad_is_open; then
