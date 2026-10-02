@@ -39,14 +39,22 @@ ad_is_open() {
   return 0
 }
 
+# 原生权限弹窗：点「ALLOW / WHILE USING」放行。返回 0=处理了一个弹窗
+handle_perm_dialog() {
+  [[ "$(resumed_activity)" == *"GrantPermissionsActivity"* ]] || return 1
+  adb_run input tap 540 1261 >/dev/null 2>&1 || true   # 两选项弹窗的 ALLOW
+  sleep 2
+  # 仍是权限弹窗（三选项定位框）则点「WHILE USING THE APP」
+  if [[ "$(resumed_activity)" == *"GrantPermissionsActivity"* ]]; then
+    adb_run input tap 540 1531 >/dev/null 2>&1 || true
+    sleep 2
+  fi
+  return 0
+}
+
 close_ad() {
-  for _ in 1 2 3; do
-    # 原生权限弹窗（GrantPermissionsActivity）优先处理：点「WHILE USING THE APP」
-    if [[ "$(resumed_activity)" == *"GrantPermissionsActivity"* ]]; then
-      adb_run input tap 540 1531 >/dev/null 2>&1 || true
-      sleep 3
-      continue
-    fi
+  for _ in 1 2 3 4; do
+    handle_perm_dialog && continue
     adb_run input keyevent 4 >/dev/null 2>&1 || true
     sleep 4
     ad_is_open || return 0
@@ -82,7 +90,8 @@ echo "[ad] install apk"
 adb install -r -d "$apk" 2>&1 | tee "$out/install.log" | tail -2
 
 # 预授予权限，避免运行时弹原生权限框挡住广告
-for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION READ_PHONE_STATE; do
+for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION READ_PHONE_STATE \
+            READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE READ_MEDIA_IMAGES; do
   adb_run pm grant "$PKG" "android.permission.$perm" >/dev/null 2>&1 || true
 done
 
@@ -131,7 +140,9 @@ for round in $(seq 1 "$MAX_ADS"); do
 
   # 点「看广告」（CDP 精确定位 button.quota-ad-btn）
   echo "[ad] click-ad: $(cdp click-ad)"
-  sleep 10
+  sleep 6
+  handle_perm_dialog || true
+  sleep 4
   screenshot "round${round}-after-tap"
 
   if ! ad_is_open; then
@@ -145,6 +156,7 @@ for round in $(seq 1 "$MAX_ADS"); do
   echo "[ad] ad is playing, waiting for completion (up to 90s)"
   for i in $(seq 1 45); do
     sleep 2
+    handle_perm_dialog && continue
     ad_is_open || break
   done
   screenshot "round${round}-endcard"
