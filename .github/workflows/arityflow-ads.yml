@@ -48,7 +48,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 22+ 自带 WebSocket，用于 CDP 驱动 WebView
+          node-version: '24'
 
       - name: Install host tools
         shell: bash

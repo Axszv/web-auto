@@ -6,6 +6,7 @@ set -uo pipefail
 
 apk="${1:-artifacts/ArityFlow.apk}"
 out="${2:-diagnostics}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$out"
 
 PKG="com.klkjapp.www"
@@ -14,7 +15,8 @@ MAX_ADS="${MAX_ADS:-3}"
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
 
 # 指定唯一设备（ARM runner 上可能有多设备/残留）
-export ANDROID_SERIAL=127.0.0.1:5555
+SERIAL=127.0.0.1:5555
+export ANDROID_SERIAL="$SERIAL"
 
 adb_run()  { adb shell "$@"; }
 adb_quick() { timeout 25s adb shell "$@" 2>/dev/null || true; }
@@ -62,8 +64,9 @@ api_get_quota() {
   " 2>/dev/null
 }
 
-# WebView 页面 uiautomator dump 抓不到内部文字，只能按固定坐标点击。
-# 屏幕固定 1080x2400，页面为响应式但在此分辨率下布局稳定。
+# WebView 页面 uiautomator dump 抓不到内部文字，改用 CDP 直连 WebView DOM 操作。
+cdp() { node "$script_dir/webview-cdp.js" "$SERIAL" "$app_pid" "$@" 2>&1 || true; }
+app_pid() { adb shell pidof "$PKG" 2>/dev/null | tr -d '\r\n'; }
 
 echo "[ad] install apk"
 adb install -r -d "$apk" 2>&1 | tee "$out/install.log" | tail -2
@@ -74,24 +77,25 @@ sleep 30
 echo "[ad] resumed: $(resumed_activity)"
 screenshot "01-launch"
 
-# 关掉"广告权限提示"弹窗（首次启动才有）
-adb_run input tap 540 2148 >/dev/null 2>&1 || true
-sleep 3
-screenshot "02-after-tips"
+# 等 WebView devtools socket 出现
+for _ in $(seq 1 20); do
+  adb shell "cat /proc/net/unix" 2>/dev/null | grep -q "webview_devtools_remote" && break
+  sleep 2
+done
+pid="$(app_pid)"
+echo "[ad] app pid: $pid"
 
-# 登录（登录页：用户名 540,888 / 密码 540,1118 / 登录按钮 540,1426）
-echo "[ad] logging in"
-adb_run input tap 540 888 >/dev/null 2>&1 || true
+# 关掉"广告权限提示"弹窗（首次启动才有）
+echo "[ad] dismiss tips: $(cdp dismiss-tips)"
 sleep 2
-adb_run input text "$ARITY_USER" >/dev/null 2>&1 || true
-sleep 2
-adb_run input tap 540 1118 >/dev/null 2>&1 || true
-sleep 2
-adb_run input text "$ARITY_PASS" >/dev/null 2>&1 || true
-sleep 2
-adb_run input tap 540 1426 >/dev/null 2>&1 || true
-sleep 25
-screenshot "03-after-login"
+
+# 登录（若在登录页）
+if [[ "$(cdp status)" == *"hasLogin\":true"* ]]; then
+  echo "[ad] login: $(cdp login "$ARITY_USER" "$ARITY_PASS")"
+  sleep 25
+fi
+echo "[ad] status: $(cdp status)"
+screenshot "02-after-login"
 
 
 watched=0
@@ -99,8 +103,8 @@ for round in $(seq 1 "$MAX_ADS"); do
   echo "[ad] ===== round $round/$MAX_ADS ====="
   echo "[ad] status: $(api_get_quota)"
 
-  # 点「看广告」（首页卡片内，坐标固定）
-  adb_run input tap 540 900 >/dev/null 2>&1 || true
+  # 点「看广告」（CDP 精确定位 button.quota-ad-btn）
+  echo "[ad] click-ad: $(cdp click-ad)"
   sleep 10
   screenshot "round${round}-after-tap"
 
