@@ -132,6 +132,10 @@ fi
 echo "[ad] status: $(cdp status)"
 screenshot "02-after-login"
 
+# 诊断：列出 App 原生桥的全部方法，找广告 SDK 的失败原因查询接口
+echo "[ad] bridge methods: $(cdp bridge-list)"
+echo "[ad] getloadFailMessage: $(cdp call-bridge getloadFailMessage '{}' 2>&1 | head -c 400)"
+
 # 读取本机（Redroid）真实设备标识，供 adcap 查询用；不用真机硬编码值
 OAID_JSON="$(cdp get-oaid)"
 echo "[ad] device id: $OAID_JSON"
