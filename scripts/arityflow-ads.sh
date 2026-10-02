@@ -70,11 +70,20 @@ wait_text() {  # 等待某个文本出现在 UI
 }
 
 echo "[ad] install apk"
-adb install -r -d "$apk" >/dev/null 2>&1 || { echo "install failed"; exit 3; }
+adb install -r -d "$apk" 2>&1 | tee "$out/install.log" | tail -2
+
+echo "[ad] webview check"
+adb_run shell pm list packages 2>/dev/null | grep -iE "webview|chrome" | tee "$out/webview.txt" || echo "(no webview pkg found)"
 
 echo "[ad] launch app"
-adb_run shell am start -n "$PKG/$ACT" >/dev/null 2>&1 || true
-sleep 25
+adb_run shell am start -n "$PKG/$ACT" 2>&1 | tee "$out/start.log" | tail -2
+sleep 30
+echo "[ad] resumed: $(resumed_activity)"
+adb_quick shell dumpsys activity activities 2>/dev/null | grep -c "$PKG" > "$out/activity-count.txt" || true
+# 崩溃/异常日志
+adb_quick logcat -d 2>/dev/null | grep -iE "FATAL|AndroidRuntime|$PKG|Exception" | tail -40 > "$out/crash.log" || true
+echo "[ad] crash lines: $(wc -l < "$out/crash.log" 2>/dev/null || echo 0)"
+screenshot "after-launch"
 
 # 登录（若未登录）
 if wait_text "请输入用户名" 6; then
