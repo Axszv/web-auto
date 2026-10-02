@@ -62,58 +62,47 @@ api_get_quota() {
   " 2>/dev/null
 }
 
-wait_text() {  # 等待某个文本出现在 UI
-  local needle="$1" limit="${2:-40}" i
-  for ((i=0;i<limit;i++)); do
-    adb_quick uiautomator dump "/sdcard/w.xml" >/dev/null 2>&1 || true
-    if adb exec-out cat /sdcard/w.xml 2>/dev/null | grep -q "$needle"; then
-      return 0
-    fi
-    sleep 2
-  done
-  return 1
-}
+# WebView 页面 uiautomator dump 抓不到内部文字，只能按固定坐标点击。
+# 屏幕固定 1080x2400，页面为响应式但在此分辨率下布局稳定。
 
 echo "[ad] install apk"
 adb install -r -d "$apk" 2>&1 | tee "$out/install.log" | tail -2
-
-echo "[ad] webview check"
-adb_run pm list packages 2>/dev/null | grep -iE "webview|chrome" | tee "$out/webview.txt" || echo "(no webview pkg found)"
 
 echo "[ad] launch app"
 adb_run am start -n "$PKG/$ACT" 2>&1 | tee "$out/start.log" | tail -2
 sleep 30
 echo "[ad] resumed: $(resumed_activity)"
-adb_quick shell dumpsys activity activities 2>/dev/null | grep -c "$PKG" > "$out/activity-count.txt" || true
-# 崩溃/异常日志
-adb_quick logcat -d 2>/dev/null | grep -iE "FATAL|AndroidRuntime|$PKG|Exception" | tail -40 > "$out/crash.log" || true
-echo "[ad] crash lines: $(wc -l < "$out/crash.log" 2>/dev/null || echo 0)"
-screenshot "after-launch"
+screenshot "01-launch"
 
-# 登录（若未登录）
-if wait_text "请输入用户名" 6; then
-  echo "[ad] logging in"
-  adb_run input text "$ARITY_USER" >/dev/null 2>&1 || true
-  sleep 2
-  adb_run input text "$ARITY_PASS" >/dev/null 2>&1 || true
-  sleep 2
-  adb_run input tap 540 1290 >/dev/null 2>&1 || true  # 登录按钮（中下方）
-  sleep 20
-fi
-screenshot "after-login"
+# 关掉"广告权限提示"弹窗（首次启动才有）
+adb_run input tap 540 2148 >/dev/null 2>&1 || true
+sleep 3
+screenshot "02-after-tips"
 
-echo "[ad] ad status: $(api_get_quota)"
+# 登录（登录页：用户名 540,888 / 密码 540,1118 / 登录按钮 540,1426）
+echo "[ad] logging in"
+adb_run input tap 540 888 >/dev/null 2>&1 || true
+sleep 2
+adb_run input text "$ARITY_USER" >/dev/null 2>&1 || true
+sleep 2
+adb_run input tap 540 1118 >/dev/null 2>&1 || true
+sleep 2
+adb_run input text "$ARITY_PASS" >/dev/null 2>&1 || true
+sleep 2
+adb_run input tap 540 1426 >/dev/null 2>&1 || true
+sleep 25
+screenshot "03-after-login"
+
 
 watched=0
 for round in $(seq 1 "$MAX_ADS"); do
   echo "[ad] ===== round $round/$MAX_ADS ====="
-  if ! wait_text "看广告" 20; then
-    echo "[ad] 看广告 button not found; skip"; break
-  fi
+  echo "[ad] status: $(api_get_quota)"
 
-  # 点「看广告」
-  adb_run input tap 300 670 >/dev/null 2>&1 || true
-  sleep 8
+  # 点「看广告」（首页卡片内，坐标固定）
+  adb_run input tap 540 900 >/dev/null 2>&1 || true
+  sleep 10
+  screenshot "round${round}-after-tap"
 
   if ! ad_is_open; then
     echo "[ad] ad did not open (无广告/SDK未出素材)"
