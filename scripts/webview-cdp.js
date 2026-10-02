@@ -131,9 +131,23 @@ async function main() {
             });
           } catch(e){ if(!done){done=true;clearTimeout(t);resolve('')} }
         });
+        // 桥可能返回：布尔 true（表示支持但取不到）、字符串 "true"、或 JSON 包裹的文本
+        const norm = (raw) => {
+          if (raw === true || raw === 'true') return '';
+          if (typeof raw !== 'string') return '';
+          let s = raw.trim();
+          if (/^"[\s\S]*"$/.test(s)) { try { s = JSON.parse(s); } catch {} }
+          if (typeof s !== 'string') return '';
+          if (/unsupported|error|^true$|^null$|^undefined$/i.test(s)) return '';
+          // getOAIDv2 返回 {"huawei":..,"oaid":..,"honor":..}，取 oaid
+          if (s.startsWith('{')) {
+            try { const j = JSON.parse(s); s = j.oaid || j.id || ''; } catch { return ''; }
+          }
+          return s.trim();
+        };
         for(const n of ['getOAIDv2','getOAID','getIMEI','getDeviceId','getInstallId']){
-          const v = await call(n);
-          if(v && v !== 'true' && !/unsupported|error/i.test(v)) return { id: v, source: n };
+          const v = norm(await call(n));
+          if(v) return { id: v, source: n };
         }
         return { id: '', source: '' };
       })()`);
