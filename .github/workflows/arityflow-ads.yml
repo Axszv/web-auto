@@ -76,6 +76,7 @@ jobs:
           docker pull "$REDROID_IMAGE"
           docker run -d --name redroid --privileged \
             -p 5555:5555 \
+            --dns 8.8.8.8 --dns 1.1.1.1 \
             "$REDROID_IMAGE" \
             androidboot.redroid_width=1080 \
             androidboot.redroid_height=2400 \
