@@ -147,7 +147,7 @@ for round in $(seq 1 "$MAX_ADS"); do
 
   # 每次点广告可能因 SDK 冷启动拿不到素材，etalien 实测前 2 轮也会失败，需多次重试
   got=0
-  for attempt in 1 2 3; do
+  for attempt in 1 2 3 4 5 6 7 8; do
     echo "[ad] attempt $attempt: $(cdp click-ad)"
     sleep 5
     handle_perm_dialog || true
@@ -165,7 +165,7 @@ for round in $(seq 1 "$MAX_ADS"); do
   done
 
   if [[ "$got" != "1" ]]; then
-    echo "[ad] round $round: 3 attempts all got no ad fill"
+    echo "[ad] round $round: 8 attempts all got no ad fill"
     adb_quick logcat -d 2>/dev/null | grep -iE "no.?bid|no_?fill|RewardVideo|onAdError|ad.*fail|sigmob|gdt|oaid|imei" | tail -30 > "$out/ad-sdk-r${round}.log" || true
     screenshot "round${round}-noad"
     if [[ "$round" -lt "$MAX_ADS" ]]; then echo "[ad] cooldown 240s"; sleep 240; fi
