@@ -12,7 +12,7 @@ mkdir -p "$out"
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
 MAX_ADS="${MAX_ADS:-3}"
-ADS_ATTEMPTS="${ADS_ATTEMPTS:-16}"   # 竞价密度：最后一次成功是在 round2 attempt10（第26次点击）才出货，砍到4次等于把唯一能出货的区间切掉了
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-6}"     # 每轮竞价次数。实测有货时 attempt 1 即命中（4 分钟完成），没货时堆次数只是烧时间；改用一天多时段覆盖代替单轮高频
 ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-60}" # 两次竞价间隔；8s 连发会被限流，20s 能出货，成功那版用的就是这个量级
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
 

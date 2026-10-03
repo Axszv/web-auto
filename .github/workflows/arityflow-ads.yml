@@ -5,7 +5,10 @@ on:
     # UTC 01:17 = 北京 09:17。
     # a-n-y-router.top 广告额度 +24.7/次、每天 3 次
     # 需真实播放（Redroid ARM64 + 伪装真机才有素材），纯 HTTP 无法发额度
-    - cron: '17 1 * * *'
+    - cron: '17 1 * * *'    # UTC 01:17 = 北京 09:17
+    - cron: '17 6 * * *'    # UTC 06:17 = 北京 14:17
+    - cron: '19 10 * * *'   # UTC 10:19 = 北京 18:19（已实证在此窗口出货过）
+    - cron: '17 14 * * *'   # UTC 14:17 = 北京 22:17
   workflow_dispatch:
     inputs:
       max_ads:
@@ -16,7 +19,7 @@ on:
       ads_attempts:
         description: Clicks on 「看广告」 per round (Sigmob has only 1 slot, each click = one bid)
         required: false
-        default: '16'
+        default: '6'
         type: string
       ads_retry_wait:
         description: Seconds between bids (too short triggers rate limiting)
@@ -121,7 +124,7 @@ jobs:
           ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
           MAX_ADS: ${{ inputs.max_ads || '3' }}
-          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '16' }}
+          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '6' }}
           ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '60' }}
         shell: bash
         run: |
