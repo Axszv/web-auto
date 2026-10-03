@@ -306,6 +306,17 @@ cdp() {
 echo "[ad] install apk"
 adb install -r -d "$apk" 2>&1 | tee "$out/install.log" | tail -2
 
+# 固定设备身份。Redroid 每次启动 android_id 都是随机生成的，对广告 SDK 来说
+# 等于「每次都换一台全新设备来索要广告」—— 这本身就是典型的异常流量特征。
+# 固定成一个稳定值，让 SDK 眼里的这台设备是有连续行为的老设备，而不是
+# 每天开机一次的陌生机器。IMEI 在容器里改不了（TelephonyManager 生成），
+# 但 android_id 是广告 SDK 一定会采的字段。
+STABLE_ANDROID_ID="${STABLE_ANDROID_ID:-7d3f1a9c5e2b8406}"
+adb_run settings put secure android_id "$STABLE_ANDROID_ID" >/dev/null 2>&1 || true
+# 国内设备默认不限制广告跟踪；显式关掉，避免被当作隐私严格型设备而少填充
+adb_run settings put secure limit_ad_tracking 0 >/dev/null 2>&1 || true
+echo "[ad] device identity: android_id=$(adb_quick settings get secure android_id 2>/dev/null | tr -d '\r') limit_ad_tracking=$(adb_quick settings get secure limit_ad_tracking 2>/dev/null | tr -d '\r')"
+
 # 预授予权限，避免运行时弹原生权限框挡住广告
 for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION READ_PHONE_STATE \
             READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE READ_MEDIA_IMAGES; do
@@ -342,6 +353,8 @@ echo "[ad] net check:"
   adb_quick pm list packages 2>/dev/null | grep -iE 'com.google.android.gms|vending|com.android.vending' || echo "(无 GMS / 无 Play Store)"
   echo "--- 设备标识"
   echo "android_id: $(adb_quick settings get secure android_id 2>/dev/null)"
+  echo "--- telephony/IMEI 来源（Redroid 无真实基带，IMEI 是生成的，看能不能固定）"
+  adb_quick getprop 2>/dev/null | grep -iE 'gsm|imei|ril|cdma|sim' | head -15
   echo "imei(bridge): 见下方 get-oaid"
 } 2>&1 | tee -a "$out/net-check.txt" || true
 
