@@ -3,7 +3,8 @@ name: ArityFlow Daily Ads (Redroid ARM64)
 on:
   schedule:
     # UTC 01:17 = 北京 09:17。
-    # 广告额度 +24.7/次、每天 3 次，需真实播放（Redroid ARM64 + 伪装真机才有素材）
+    # a-n-y-router.top 广告额度 +24.7/次、每天 3 次
+    # 需真实播放（Redroid ARM64 + 伪装真机才有素材），纯 HTTP 无法发额度
     - cron: '17 1 * * *'
   workflow_dispatch:
     inputs:
@@ -66,7 +67,7 @@ jobs:
         run: |
           mkdir -p diagnostics
           sudo apt-get update
-          sudo apt-get install -y adb jq curl
+          sudo apt-get install -y adb jq
           uname -a | tee diagnostics/host.txt
 
       - name: Enable Android Binder devices
@@ -92,18 +93,6 @@ jobs:
             androidboot.redroid_height=2400 \
             androidboot.redroid_dpi=420 \
             androidboot.redroid_gpu_mode=guest \
-            ro.hardware=qcom \
-            ro.hardware.egl=adreno \
-            ro.hardware.vulkan=adreno \
-            ro.product.board=pudding \
-            ro.board.platform=kalama \
-            ro.build.tags=release-keys \
-            ro.build.type=user \
-            ro.secure=1 \
-            ro.debuggable=0 \
-            ro.build.characteristics=phone \
-            ro.boot.verifiedbootstate=green \
-            ro.boot.flash.locked=1 \
             ro.product.model=25060RK16C \
             ro.product.brand=REDMI \
             ro.product.manufacturer=Xiaomi \
@@ -117,41 +106,7 @@ jobs:
 
       - name: Wait for Android boot
         shell: bash
-        run: |
-          set +e
-          bash scripts/redroid-boot.sh diagnostics
-          # ro.debuggable=0 是为了让设备看起来像零售真机，但 Redroid 的 adb 链路
-          # 有可能依赖它。所以启动后立刻验证 adb，不通就把容器重建回
-          # debuggable=1（宁可少伪装一项，也不能整个 job 挂掉）。
-          export ANDROID_SERIAL=127.0.0.1:5555
-          if ! adb -s 127.0.0.1:5555 shell true 2>/dev/null; then
-            echo "[warn] ro.debuggable=0 导致 adb 不可用，回退为 1"
-            docker rm -f redroid >/dev/null 2>&1
-            docker run -d --name redroid --privileged \
-              -p 5555:5555 \
-              --dns 8.8.8.8 --dns 1.1.1.1 \
-              "$REDROID_IMAGE" \
-              androidboot.redroid_width=1080 \
-              androidboot.redroid_height=2400 \
-              androidboot.redroid_dpi=420 \
-              androidboot.redroid_gpu_mode=guest \
-              ro.hardware=qcom \
-              ro.build.tags=release-keys \
-              ro.build.type=user \
-              ro.secure=1 \
-              ro.product.model=25060RK16C \
-              ro.product.brand=REDMI \
-              ro.product.manufacturer=Xiaomi \
-              ro.product.name=Redmi\ K80 \
-              ro.product.device=pudding \
-              ro.build.product=pudding \
-              ro.build.flavor=redmi \
-              ro.build.fingerprint=Xiaomi/pudding/pudding:14/UKQ1.230804.001/V14.0.4.0.UJSCN:user/release-keys \
-              ro.miui.ui.version.name=HyperOS2.0 \
-              ro.product.locale=zh-CN >/dev/null
-            bash scripts/redroid-boot.sh diagnostics
-          fi
-          exit 0
+        run: bash scripts/redroid-boot.sh diagnostics
 
       - name: Probe OAID support in Redroid
         shell: bash
