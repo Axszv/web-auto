@@ -2,26 +2,28 @@ name: ArityFlow Daily Ads (Redroid ARM64)
 
 on:
   schedule:
-    # UTC 01:17 = 北京 09:17。
-    # a-n-y-router.top 广告额度 +24.7/次、每天 3 次
-    # 需真实播放（Redroid ARM64 + 伪装真机才有素材），纯 HTTP 无法发额度
-    - cron: '17 1 * * *'
+    # 每天两次，刻意压低频率。
+    # Sigmob 对同一出口 IP 的高频竞价会限流：实测 10-02 三轮里能拿到快手素材，
+    # 10-03 连续跑了 4 个 run / 近 200 次竞价后全部 700000 无广告返回。
+    # 少而稀，给共享 IP 留恢复时间，命中机会反而更高。
+    - cron: '23 2 * * *'   # UTC 02:23 = 北京 10:23
+    - cron: '41 13 * * *'  # UTC 13:41 = 北京 21:41
   workflow_dispatch:
     inputs:
       max_ads:
         description: Max ads to watch (0 = only report balance)
         required: false
-        default: '3'
+        default: '2'
         type: string
       ads_attempts:
         description: Clicks on 「看广告」 per round (Sigmob has only 1 slot, each click = one bid)
         required: false
-        default: '16'
+        default: '6'
         type: string
       ads_retry_wait:
         description: Seconds between bids (too short triggers rate limiting)
         required: false
-        default: '60'
+        default: '90'
         type: string
 
 permissions:
@@ -120,9 +122,9 @@ jobs:
           ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
           ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
-          MAX_ADS: ${{ inputs.max_ads || '3' }}
-          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '16' }}
-          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '60' }}
+          MAX_ADS: ${{ inputs.max_ads || '2' }}
+          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '6' }}
+          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '90' }}
         shell: bash
         run: |
           if [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then

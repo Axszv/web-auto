@@ -1,0 +1,14 @@
+=== 已装厂商/OAID 相关包 ===
+(无任何厂商 OAID 服务)
+
+=== 系统服务里有无 OAID ===
+(无 OAID 系统服务)
+
+=== APK 内含的 OAID SDK 类名 ===
+apk: 
+
+=== 设备标识现状 ===
+ANDROID_ID: 
+brand: 
+manufacturer: 
+fingerprint: 

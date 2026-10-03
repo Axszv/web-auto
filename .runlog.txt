@@ -1,0 +1,589 @@
+ads	Set up job	﻿2026-10-03T04:49:52.6408455Z Current runner version: '2.337.0'
+ads	Set up job	2026-10-03T04:49:52.6440701Z ##[group]Runner Image Provisioner
+ads	Set up job	2026-10-03T04:49:52.6441788Z Hosted Compute Agent
+ads	Set up job	2026-10-03T04:49:52.6442456Z Version: 20260901.588
+ads	Set up job	2026-10-03T04:49:52.6443227Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+ads	Set up job	2026-10-03T04:49:52.6444028Z Build Date: 2026-09-01T19:56:44Z
+ads	Set up job	2026-10-03T04:49:52.6444910Z Worker ID: {1acd9906-0007-4a36-8d79-496daef0e6d1}
+ads	Set up job	2026-10-03T04:49:52.6445661Z Azure Region: eastus2
+ads	Set up job	2026-10-03T04:49:52.6446874Z ##[endgroup]
+ads	Set up job	2026-10-03T04:49:52.6449457Z ##[group]Operating System
+ads	Set up job	2026-10-03T04:49:52.6450228Z Ubuntu
+ads	Set up job	2026-10-03T04:49:52.6450980Z 24.04.5
+ads	Set up job	2026-10-03T04:49:52.6451526Z LTS
+ads	Set up job	2026-10-03T04:49:52.6452118Z ##[endgroup]
+ads	Set up job	2026-10-03T04:49:52.6452727Z ##[group]Runner Image
+ads	Set up job	2026-10-03T04:49:52.6453438Z Image: ubuntu-24.04-arm
+ads	Set up job	2026-10-03T04:49:52.6454147Z Version: 20260927.135.1
+ads	Set up job	2026-10-03T04:49:52.6455547Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24-arm64/20260927.135/images/ubuntu/Ubuntu2404-Arm64-Readme.md
+ads	Set up job	2026-10-03T04:49:52.6457572Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24-arm64%2F20260927.135
+ads	Set up job	2026-10-03T04:49:52.6458997Z ##[endgroup]
+ads	Set up job	2026-10-03T04:49:52.6460231Z ##[group]GITHUB_TOKEN Permissions
+ads	Set up job	2026-10-03T04:49:52.6463795Z Contents: read
+ads	Set up job	2026-10-03T04:49:52.6464562Z Metadata: read
+ads	Set up job	2026-10-03T04:49:52.6465134Z ##[endgroup]
+ads	Set up job	2026-10-03T04:49:52.6468831Z Secret source: Actions
+ads	Set up job	2026-10-03T04:49:52.6469909Z Cache mode: write
+ads	Set up job	2026-10-03T04:49:52.6471148Z Prepare workflow directory
+ads	Set up job	2026-10-03T04:49:52.6857572Z Prepare all required actions
+ads	Set up job	2026-10-03T04:49:52.6909053Z Getting action download info
+ads	Set up job	2026-10-03T04:49:52.9012703Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+ads	Set up job	2026-10-03T04:49:53.0014702Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+ads	Set up job	2026-10-03T04:49:53.1245295Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+ads	Set up job	2026-10-03T04:49:53.3007763Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+ads	Set up job	2026-10-03T04:49:53.5271238Z Complete job name: ads
+ads	Run actions/checkout@v4	﻿2026-10-03T04:49:53.6246385Z ##[group]Run actions/checkout@v4
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6248815Z with:
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6249702Z   repository: ***v/web-auto
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6255566Z   token: ***
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6256198Z   ssh-strict: true
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6256737Z   ssh-user: git
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6257316Z   persist-credentials: true
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6258233Z   clean: true
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6258920Z   sparse-checkout-cone-mode: true
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6259651Z   fetch-depth: 1
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6260330Z   fetch-tags: false
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6261127Z   show-progress: true
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6261891Z   lfs: false
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6262472Z   submodules: false
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6263025Z   set-safe-directory: true
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6263698Z   allow-unsafe-pr-checkout: false
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.6265068Z ##[endgroup]
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7158548Z Syncing repository: ***v/web-auto
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7160936Z ##[group]Getting Git version info
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7161981Z Working directory is '/home/runner/work/web-auto/web-auto'
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7163588Z [command]/usr/bin/git version
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7232076Z git version 2.55.0
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7271133Z ##[endgroup]
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7281237Z Temporarily overriding HOME='/home/runner/work/_temp/6feee947-b9b3-464d-8e9d-9a59a4831c90' before making global git config changes
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7283761Z Adding repository directory to the temporary git global config as a safe directory
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7285523Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/web-auto/web-auto
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7302877Z Deleting the contents of '/home/runner/work/web-auto/web-auto'
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7313847Z ##[group]Initializing the repository
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7323024Z [command]/usr/bin/git init /home/runner/work/web-auto/web-auto
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7417307Z hint: Using 'master' as the name for the initial branch. This default branch name
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7425956Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7439666Z hint: to use in all of your new repositories, which will suppress this warning,
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7441302Z hint: call:
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7442235Z hint:
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7443620Z hint: 	git config --global init.defaultBranch <name>
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7444648Z hint:
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7445691Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7447440Z hint: 'development'. The just-created branch can be renamed via this command:
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7448912Z hint:
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7450234Z hint: 	git branch -m <name>
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7451258Z hint:
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7453367Z hint: Disable this message with "git config set advice.defaultBranchName false"
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7454912Z Initialized empty Git repository in /home/runner/work/web-auto/web-auto/.git/
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7458750Z [command]/usr/bin/git remote add origin https://github.com/***v/web-auto
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7477073Z ##[endgroup]
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7478979Z ##[group]Disabling automatic garbage collection
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7480251Z [command]/usr/bin/git config --local gc.auto 0
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7501361Z ##[endgroup]
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7502573Z ##[group]Setting up auth
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7513737Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7543822Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7832598Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.7883875Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.8081161Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.8113873Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.8315026Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.8353974Z ##[endgroup]
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.8355202Z ##[group]Fetching the repository
+ads	Run actions/checkout@v4	2026-10-03T04:49:53.8363096Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +60b3c05e371fe49f148778adebd3223d0d8fa27f:refs/remotes/origin/main
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0260448Z From https://github.com/***v/web-auto
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0261950Z  * [new ref]         60b3c05e371fe49f148778adebd3223d0d8fa27f -> origin/main
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0264461Z ##[endgroup]
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0265443Z ##[group]Determining the checkout info
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0266532Z ##[endgroup]
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0272224Z [command]/usr/bin/git sparse-checkout disable
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0313219Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0341080Z ##[group]Checking out the ref
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0345044Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0391724Z Switched to a new branch 'main'
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0393493Z branch 'main' set up to track 'origin/main'.
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0397647Z ##[endgroup]
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0443179Z [command]/usr/bin/git log -1 --format=%H
+ads	Run actions/checkout@v4	2026-10-03T04:49:54.0466488Z 60b3c05e371fe49f148778adebd3223d0d8fa27f
+ads	Cache ArityFlow APK	﻿2026-10-03T04:49:54.0729922Z ##[group]Run actions/cache/restore@v4
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.0730743Z with:
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.0731427Z   path: artifacts/ArityFlow.apk
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.0732106Z   key: arityflow-apk-v130
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.0733034Z   enableCrossOsArchive: false
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.0733722Z   fail-on-cache-miss: false
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.0734265Z   lookup-only: false
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.0734865Z ##[endgroup]
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.1644673Z (node:2297) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.1646646Z (Use `node --trace-deprecation ...` to show where the warning was created)
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.2326704Z Cache hit for: arityflow-apk-v130
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.2410527Z (node:2297) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.4933893Z Received 22061206 of 22061206 (100.0%), 101.2 MBs/sec
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.4935599Z Cache Size: ~21 MB (22061206 B)
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.4958090Z [command]/usr/bin/tar -xf /home/runner/work/_temp/191b2680-eea4-4542-bd60-03260c08fc0b/cache.tzst -P -C /home/runner/work/web-auto/web-auto --use-compress-program unzstd
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.5203691Z Cache restored successfully
+ads	Cache ArityFlow APK	2026-10-03T04:49:54.5292733Z Cache restored from key: arityflow-apk-v130
+ads	Run actions/setup-node@v4	﻿2026-10-03T04:49:54.5525457Z ##[group]Run actions/setup-node@v4
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.5526071Z with:
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.5526462Z   node-version: 24
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.5526811Z   always-auth: false
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.5527213Z   check-latest: false
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.5530186Z   token: ***
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.5530658Z ##[endgroup]
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.6734626Z Found in cache @ /opt/hostedtoolcache/node/24.21.0/arm64
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.6736687Z (node:2314) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.6737519Z (Use `node --trace-deprecation ...` to show where the warning was created)
+ads	Run actions/setup-node@v4	2026-10-03T04:49:54.6739563Z ##[group]Environment details
+ads	Run actions/setup-node@v4	2026-10-03T04:49:57.5996904Z node: v24.21.0
+ads	Run actions/setup-node@v4	2026-10-03T04:49:57.5997403Z npm: 11.19.0
+ads	Run actions/setup-node@v4	2026-10-03T04:49:57.5998105Z yarn: 1.22.22
+ads	Run actions/setup-node@v4	2026-10-03T04:49:57.5999035Z ##[endgroup]
+ads	Install host tools	﻿2026-10-03T04:49:57.6116541Z ##[group]Run mkdir -p diagnostics
+ads	Install host tools	2026-10-03T04:49:57.6117211Z ^[[36;1mmkdir -p diagnostics^[[0m
+ads	Install host tools	2026-10-03T04:49:57.6117609Z ^[[36;1msudo apt-get update^[[0m
+ads	Install host tools	2026-10-03T04:49:57.6118235Z ^[[36;1msudo apt-get install -y adb jq^[[0m
+ads	Install host tools	2026-10-03T04:49:57.6118614Z ^[[36;1muname -a | tee diagnostics/host.txt^[[0m
+ads	Install host tools	2026-10-03T04:49:57.6210306Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+ads	Install host tools	2026-10-03T04:49:57.6210817Z ##[endgroup]
+ads	Install host tools	2026-10-03T04:49:57.7244095Z Get:1 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+ads	Install host tools	2026-10-03T04:49:57.7833545Z Get:2 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [458 kB]
+ads	Install host tools	2026-10-03T04:49:57.7989616Z Get:3 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [12.6 kB]
+ads	Install host tools	2026-10-03T04:49:57.8026607Z Get:4 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [511 kB]
+ads	Install host tools	2026-10-03T04:49:58.0600155Z Hit:5 http://ports.ubuntu.com/ubuntu-ports noble InRelease
+ads	Install host tools	2026-10-03T04:49:58.1605342Z Get:6 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]
+ads	Install host tools	2026-10-03T04:49:58.5928512Z Get:7 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease [126 kB]
+ads	Install host tools	2026-10-03T04:49:58.7972790Z Get:8 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease [126 kB]
+ads	Install host tools	2026-10-03T04:49:58.9357395Z Get:9 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages [1424 kB]
+ads	Install host tools	2026-10-03T04:49:59.3999063Z Get:10 http://ports.ubuntu.com/ubuntu-ports noble-updates/main Translation-en [304 kB]
+ads	Install host tools	2026-10-03T04:49:59.5211743Z Get:11 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Components [178 kB]
+ads	Install host tools	2026-10-03T04:49:59.6324362Z Get:12 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 Packages [1736 kB]
+ads	Install host tools	2026-10-03T04:49:59.8880108Z Get:13 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe Translation-en [341 kB]
+ads	Install host tools	2026-10-03T04:50:00.0004605Z Get:14 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 Components [387 kB]
+ads	Install host tools	2026-10-03T04:50:00.1148819Z Get:15 http://ports.ubuntu.com/ubuntu-ports noble-updates/restricted arm64 Packages [2571 kB]
+ads	Install host tools	2026-10-03T04:50:00.3418239Z Get:16 http://ports.ubuntu.com/ubuntu-ports noble-updates/restricted Translation-en [394 kB]
+ads	Install host tools	2026-10-03T04:50:00.4508521Z Get:17 http://ports.ubuntu.com/ubuntu-ports noble-backports/main arm64 Components [3572 B]
+ads	Install host tools	2026-10-03T04:50:00.5502345Z Get:18 http://ports.ubuntu.com/ubuntu-ports noble-backports/universe arm64 Components [12.6 kB]
+ads	Install host tools	2026-10-03T04:50:00.7921823Z Get:19 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages [1133 kB]
+ads	Install host tools	2026-10-03T04:50:00.9135315Z Get:20 http://ports.ubuntu.com/ubuntu-ports noble-security/main Translation-en [221 kB]
+ads	Install host tools	2026-10-03T04:50:01.0181310Z Get:21 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Components [43.3 kB]
+ads	Install host tools	2026-10-03T04:50:01.1195183Z Get:22 http://ports.ubuntu.com/ubuntu-ports noble-security/universe arm64 Packages [1286 kB]
+ads	Install host tools	2026-10-03T04:50:01.2431371Z Get:23 http://ports.ubuntu.com/ubuntu-ports noble-security/universe Translation-en [244 kB]
+ads	Install host tools	2026-10-03T04:50:01.3479601Z Get:24 http://ports.ubuntu.com/ubuntu-ports noble-security/universe arm64 Components [76.3 kB]
+ads	Install host tools	2026-10-03T04:50:01.4493887Z Get:25 http://ports.ubuntu.com/ubuntu-ports noble-security/restricted arm64 Packages [2371 kB]
+ads	Install host tools	2026-10-03T04:50:01.5943980Z Get:26 http://ports.ubuntu.com/ubuntu-ports noble-security/restricted Translation-en [361 kB]
+ads	Install host tools	2026-10-03T04:50:05.5546059Z Fetched 14.4 MB in 4s (3591 kB/s)
+ads	Install host tools	2026-10-03T04:50:06.5549645Z Reading package lists...
+ads	Install host tools	2026-10-03T04:50:06.5863661Z Reading package lists...
+ads	Install host tools	2026-10-03T04:50:06.8650152Z Building dependency tree...
+ads	Install host tools	2026-10-03T04:50:06.8655592Z Reading state information...
+ads	Install host tools	2026-10-03T04:50:07.1417161Z jq is already the newest version (1.7.1-3ubuntu0.24.04.2).
+ads	Install host tools	2026-10-03T04:50:07.1417780Z The following additional packages will be installed:
+ads	Install host tools	2026-10-03T04:50:07.1418772Z   android-libbase android-libboringssl android-libcutils android-liblog
+ads	Install host tools	2026-10-03T04:50:07.1425464Z   android-libziparchive android-sdk-platform-tools-common libprotobuf32t64
+ads	Install host tools	2026-10-03T04:50:07.1736863Z The following NEW packages will be installed:
+ads	Install host tools	2026-10-03T04:50:07.1738358Z   adb android-libbase android-libboringssl android-libcutils android-liblog
+ads	Install host tools	2026-10-03T04:50:07.1759275Z   android-libziparchive android-sdk-platform-tools-common libprotobuf32t64
+ads	Install host tools	2026-10-03T04:50:07.2301535Z 0 upgraded, 8 newly installed, 0 to remove and 27 not upgraded.
+ads	Install host tools	2026-10-03T04:50:07.2302120Z Need to get 2003 kB of archives.
+ads	Install host tools	2026-10-03T04:50:07.2302861Z After this operation, 6612 kB of additional disk space will be used.
+ads	Install host tools	2026-10-03T04:50:07.2303673Z Get:1 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 android-liblog arm64 1:34.0.4-1build3 [35.7 kB]
+ads	Install host tools	2026-10-03T04:50:07.2732044Z Get:2 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 android-libbase arm64 1:34.0.4-1build3 [96.8 kB]
+ads	Install host tools	2026-10-03T04:50:07.3238065Z Get:3 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 android-libboringssl arm64 14.0.0+r11-4build1 [658 kB]
+ads	Install host tools	2026-10-03T04:50:07.4126464Z Get:4 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 android-libcutils arm64 1:34.0.4-1build3 [35.8 kB]
+ads	Install host tools	2026-10-03T04:50:07.4306685Z Get:5 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 android-libziparchive arm64 1:34.0.4-1build3 [40.5 kB]
+ads	Install host tools	2026-10-03T04:50:07.4488468Z Get:6 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libprotobuf32t64 arm64 3.21.12-8.2ubuntu0.3 [859 kB]
+ads	Install host tools	2026-10-03T04:50:07.4940488Z Get:7 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 adb arm64 1:34.0.4-1build3 [272 kB]
+ads	Install host tools	2026-10-03T04:50:07.5150043Z Get:8 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 android-sdk-platform-tools-common all 28.0.2+9 [6402 B]
+ads	Install host tools	2026-10-03T04:50:07.7836150Z Fetched 2003 kB in 0s (6080 kB/s)
+ads	Install host tools	2026-10-03T04:50:07.8039434Z Selecting previously unselected package android-liblog:arm64.
+ads	Install host tools	2026-10-03T04:50:07.8183495Z (Reading database ... 
+ads	Install host tools	2026-10-03T04:50:07.8185021Z (Reading database ... 5%
+ads	Install host tools	2026-10-03T04:50:07.8185409Z (Reading database ... 10%
+ads	Install host tools	2026-10-03T04:50:07.8185944Z (Reading database ... 15%
+ads	Install host tools	2026-10-03T04:50:07.8186306Z (Reading database ... 20%
+ads	Install host tools	2026-10-03T04:50:07.8186716Z (Reading database ... 25%
+ads	Install host tools	2026-10-03T04:50:07.8187011Z (Reading database ... 30%
+ads	Install host tools	2026-10-03T04:50:07.8187372Z (Reading database ... 35%
+ads	Install host tools	2026-10-03T04:50:07.8187673Z (Reading database ... 40%
+ads	Install host tools	2026-10-03T04:50:07.8188388Z (Reading database ... 45%
+ads	Install host tools	2026-10-03T04:50:07.8188705Z (Reading database ... 50%
+ads	Install host tools	2026-10-03T04:50:07.8276878Z (Reading database ... 55%
+ads	Install host tools	2026-10-03T04:50:07.9710017Z (Reading database ... 60%
+ads	Install host tools	2026-10-03T04:50:08.1743547Z (Reading database ... 65%
+ads	Install host tools	2026-10-03T04:50:08.3808185Z (Reading database ... 70%
+ads	Install host tools	2026-10-03T04:50:08.5282218Z (Reading database ... 75%
+ads	Install host tools	2026-10-03T04:50:08.6205780Z (Reading database ... 80%
+ads	Install host tools	2026-10-03T04:50:08.8236349Z (Reading database ... 85%
+ads	Install host tools	2026-10-03T04:50:09.0341389Z (Reading database ... 90%
+ads	Install host tools	2026-10-03T04:50:09.1721723Z (Reading database ... 95%
+ads	Install host tools	2026-10-03T04:50:09.1722410Z (Reading database ... 100%
+ads	Install host tools	2026-10-03T04:50:09.1723160Z (Reading database ... 201617 files and directories currently installed.)
+ads	Install host tools	2026-10-03T04:50:09.1770226Z Preparing to unpack .../0-android-liblog_1%3a34.0.4-1build3_arm64.deb ...
+ads	Install host tools	2026-10-03T04:50:09.1976945Z Unpacking android-liblog:arm64 (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.2270466Z Selecting previously unselected package android-libbase:arm64.
+ads	Install host tools	2026-10-03T04:50:09.2469443Z Preparing to unpack .../1-android-libbase_1%3a34.0.4-1build3_arm64.deb ...
+ads	Install host tools	2026-10-03T04:50:09.2481729Z Unpacking android-libbase:arm64 (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.2716345Z Selecting previously unselected package android-libboringssl:arm64.
+ads	Install host tools	2026-10-03T04:50:09.2907259Z Preparing to unpack .../2-android-libboringssl_14.0.0+r11-4build1_arm64.deb ...
+ads	Install host tools	2026-10-03T04:50:09.2916827Z Unpacking android-libboringssl:arm64 (14.0.0+r11-4build1) ...
+ads	Install host tools	2026-10-03T04:50:09.3205429Z Selecting previously unselected package android-libcutils:arm64.
+ads	Install host tools	2026-10-03T04:50:09.3390770Z Preparing to unpack .../3-android-libcutils_1%3a34.0.4-1build3_arm64.deb ...
+ads	Install host tools	2026-10-03T04:50:09.3401871Z Unpacking android-libcutils:arm64 (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.3603962Z Selecting previously unselected package android-libziparchive:arm64.
+ads	Install host tools	2026-10-03T04:50:09.3810984Z Preparing to unpack .../4-android-libziparchive_1%3a34.0.4-1build3_arm64.deb ...
+ads	Install host tools	2026-10-03T04:50:09.3822475Z Unpacking android-libziparchive:arm64 (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.4016993Z Selecting previously unselected package libprotobuf32t64:arm64.
+ads	Install host tools	2026-10-03T04:50:09.4219711Z Preparing to unpack .../5-libprotobuf32t64_3.21.12-8.2ubuntu0.3_arm64.deb ...
+ads	Install host tools	2026-10-03T04:50:09.4231654Z Unpacking libprotobuf32t64:arm64 (3.21.12-8.2ubuntu0.3) ...
+ads	Install host tools	2026-10-03T04:50:09.4603272Z Selecting previously unselected package adb.
+ads	Install host tools	2026-10-03T04:50:09.4802287Z Preparing to unpack .../6-adb_1%3a34.0.4-1build3_arm64.deb ...
+ads	Install host tools	2026-10-03T04:50:09.4813068Z Unpacking adb (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.5067231Z Selecting previously unselected package android-sdk-platform-tools-common.
+ads	Install host tools	2026-10-03T04:50:09.5273415Z Preparing to unpack .../7-android-sdk-platform-tools-common_28.0.2+9_all.deb ...
+ads	Install host tools	2026-10-03T04:50:09.5282880Z Unpacking android-sdk-platform-tools-common (28.0.2+9) ...
+ads	Install host tools	2026-10-03T04:50:09.5689540Z Setting up libprotobuf32t64:arm64 (3.21.12-8.2ubuntu0.3) ...
+ads	Install host tools	2026-10-03T04:50:09.5712935Z Setting up android-sdk-platform-tools-common (28.0.2+9) ...
+ads	Install host tools	2026-10-03T04:50:09.5730492Z Setting up android-liblog:arm64 (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.5748419Z Setting up android-libboringssl:arm64 (14.0.0+r11-4build1) ...
+ads	Install host tools	2026-10-03T04:50:09.5765880Z Setting up android-libbase:arm64 (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.5785863Z Setting up android-libziparchive:arm64 (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.5802867Z Setting up android-libcutils:arm64 (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.5823988Z Setting up adb (1:34.0.4-1build3) ...
+ads	Install host tools	2026-10-03T04:50:09.5846818Z Processing triggers for man-db (2.12.0-4build2) ...
+ads	Install host tools	2026-10-03T04:50:09.5868749Z Not building database; man-db/auto-update is not 'true'.
+ads	Install host tools	2026-10-03T04:50:09.5882949Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+ads	Install host tools	2026-10-03T04:50:12.5824528Z 
+ads	Install host tools	2026-10-03T04:50:12.5825571Z Running kernel seems to be up-to-date.
+ads	Install host tools	2026-10-03T04:50:12.5825906Z 
+ads	Install host tools	2026-10-03T04:50:12.5826099Z No services need to be restarted.
+ads	Install host tools	2026-10-03T04:50:12.5826373Z 
+ads	Install host tools	2026-10-03T04:50:12.5826590Z No containers need to be restarted.
+ads	Install host tools	2026-10-03T04:50:12.5826808Z 
+ads	Install host tools	2026-10-03T04:50:12.5827013Z No user sessions are running outdated binaries.
+ads	Install host tools	2026-10-03T04:50:12.5827230Z 
+ads	Install host tools	2026-10-03T04:50:12.5827531Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+ads	Install host tools	2026-10-03T04:50:13.8666736Z Linux runnervm4mqa1 6.17.0-1022-azure #22-Ubuntu SMP Mon Jul 27 17:12:01 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux
+ads	Enable Android Binder devices	﻿2026-10-03T04:50:13.8712943Z ##[group]Run set -euxo pipefail
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8713435Z ^[[36;1mset -euxo pipefail^[[0m
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8713889Z ^[[36;1mif ! sudo modprobe binder_linux; then^[[0m
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8714323Z ^[[36;1m  sudo apt-get install -y "linux-modules-extra-$(uname -r)" || true^[[0m
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8714745Z ^[[36;1m  sudo modprobe binder_linux^[[0m
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8715079Z ^[[36;1mfi^[[0m
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8751143Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8751545Z ##[endgroup]
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8813308Z + sudo modprobe binder_linux
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8869652Z modprobe: FATAL: Module binder_linux not found in directory /lib/modules/6.17.0-1022-azure
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8880764Z ++ uname -r
+ads	Enable Android Binder devices	2026-10-03T04:50:13.8888327Z + sudo apt-get install -y linux-modules-extra-6.17.0-1022-azure
+ads	Enable Android Binder devices	2026-10-03T04:50:13.9050452Z Reading package lists...
+ads	Enable Android Binder devices	2026-10-03T04:50:14.1847823Z Building dependency tree...
+ads	Enable Android Binder devices	2026-10-03T04:50:14.1855445Z Reading state information...
+ads	Enable Android Binder devices	2026-10-03T04:50:14.4611358Z The following additional packages will be installed:
+ads	Enable Android Binder devices	2026-10-03T04:50:14.4611888Z   wireless-regdb
+ads	Enable Android Binder devices	2026-10-03T04:50:14.4788437Z The following NEW packages will be installed:
+ads	Enable Android Binder devices	2026-10-03T04:50:14.4790426Z   linux-modules-extra-6.17.0-1022-azure wireless-regdb
+ads	Enable Android Binder devices	2026-10-03T04:50:14.6982401Z 0 upgraded, 2 newly installed, 0 to remove and 27 not upgraded.
+ads	Enable Android Binder devices	2026-10-03T04:50:14.6983294Z Need to get 114 MB of archives.
+ads	Enable Android Binder devices	2026-10-03T04:50:14.6983746Z After this operation, 112 MB of additional disk space will be used.
+ads	Enable Android Binder devices	2026-10-03T04:50:14.6984625Z Get:1 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 wireless-regdb all 2026.05.30-0ubuntu1~24.04.1 [7714 B]
+ads	Enable Android Binder devices	2026-10-03T04:50:14.7985882Z Get:2 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 linux-modules-extra-6.17.0-1022-azure arm64 6.17.0-1022.22 [114 MB]
+ads	Enable Android Binder devices	2026-10-03T04:50:17.2986177Z Fetched 114 MB in 3s (44.8 MB/s)
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3160249Z Selecting previously unselected package wireless-regdb.
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3187350Z (Reading database ... 
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3188301Z (Reading database ... 5%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3188934Z (Reading database ... 10%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3189389Z (Reading database ... 15%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3189727Z (Reading database ... 20%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3190039Z (Reading database ... 25%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3190314Z (Reading database ... 30%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3190688Z (Reading database ... 35%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3190979Z (Reading database ... 40%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3191330Z (Reading database ... 45%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3191630Z (Reading database ... 50%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3208120Z (Reading database ... 55%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3305705Z (Reading database ... 60%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3327703Z (Reading database ... 65%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3342159Z (Reading database ... 70%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3373387Z (Reading database ... 75%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3393316Z (Reading database ... 80%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3418586Z (Reading database ... 85%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3616069Z (Reading database ... 90%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3793967Z (Reading database ... 95%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3794509Z (Reading database ... 100%
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3795531Z (Reading database ... 201678 files and directories currently installed.)
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3839185Z Preparing to unpack .../wireless-regdb_2026.05.30-0ubuntu1~24.04.1_all.deb ...
+ads	Enable Android Binder devices	2026-10-03T04:50:17.3850149Z Unpacking wireless-regdb (2026.05.30-0ubuntu1~24.04.1) ...
+ads	Enable Android Binder devices	2026-10-03T04:50:17.4179136Z Selecting previously unselected package linux-modules-extra-6.17.0-1022-azure.
+ads	Enable Android Binder devices	2026-10-03T04:50:17.4369106Z Preparing to unpack .../linux-modules-extra-6.17.0-1022-azure_6.17.0-1022.22_arm64.deb ...
+ads	Enable Android Binder devices	2026-10-03T04:50:17.4380070Z Unpacking linux-modules-extra-6.17.0-1022-azure (6.17.0-1022.22) ...
+ads	Enable Android Binder devices	2026-10-03T04:50:18.7669805Z Setting up wireless-regdb (2026.05.30-0ubuntu1~24.04.1) ...
+ads	Enable Android Binder devices	2026-10-03T04:50:18.7691061Z Setting up linux-modules-extra-6.17.0-1022-azure (6.17.0-1022.22) ...
+ads	Enable Android Binder devices	2026-10-03T04:50:23.7719531Z Processing triggers for man-db (2.12.0-4build2) ...
+ads	Enable Android Binder devices	2026-10-03T04:50:23.7736214Z Not building database; man-db/auto-update is not 'true'.
+ads	Enable Android Binder devices	2026-10-03T04:50:23.7752148Z Processing triggers for linux-image-6.17.0-1022-azure (6.17.0-1022.22) ...
+ads	Enable Android Binder devices	2026-10-03T04:50:23.8275756Z /etc/kernel/postinst.d/initramfs-tools:
+ads	Enable Android Binder devices	2026-10-03T04:50:23.8276593Z update-initramfs: Generating /boot/initrd.img-6.17.0-1022-azure
+ads	Enable Android Binder devices	2026-10-03T04:50:28.7216209Z W: Possible missing firmware /lib/firmware/renesas_usb_fw.mem for built-in driver xhci_pci_renesas
+ads	Enable Android Binder devices	2026-10-03T04:50:33.1770197Z flash-kernel: deferring update (trigger activated)
+ads	Enable Android Binder devices	2026-10-03T04:50:33.3492081Z /etc/kernel/postinst.d/zz-flash-kernel:
+ads	Enable Android Binder devices	2026-10-03T04:50:33.3492719Z flash-kernel: deferring update (trigger activated)
+ads	Enable Android Binder devices	2026-10-03T04:50:33.9241656Z /etc/kernel/postinst.d/zz-update-grub:
+ads	Enable Android Binder devices	2026-10-03T04:50:33.9242272Z Sourcing file `/etc/default/grub'
+ads	Enable Android Binder devices	2026-10-03T04:50:33.9317794Z Sourcing file `/etc/default/grub.d/40-force-partuuid.cfg'
+ads	Enable Android Binder devices	2026-10-03T04:50:33.9542533Z Sourcing file `/etc/default/grub.d/50-cloudimg-settings.cfg'
+ads	Enable Android Binder devices	2026-10-03T04:50:33.9558734Z Sourcing file `/etc/default/grub.d/99-runner-performance.cfg'
+ads	Enable Android Binder devices	2026-10-03T04:50:33.9575628Z Generating grub configuration file ...
+ads	Enable Android Binder devices	2026-10-03T04:50:34.0057493Z GRUB_FORCE_PARTUUID is set, will attempt initrdless boot
+ads	Enable Android Binder devices	2026-10-03T04:50:34.0454891Z Found linux image: /boot/vmlinuz-6.17.0-1022-azure
+ads	Enable Android Binder devices	2026-10-03T04:50:34.0918351Z Found initrd image: /boot/initrd.img-6.17.0-1022-azure
+ads	Enable Android Binder devices	2026-10-03T04:50:34.3035642Z Warning: os-prober will not be executed to detect other bootable partitions.
+ads	Enable Android Binder devices	2026-10-03T04:50:34.3036581Z Systems on them will not be added to the GRUB boot configuration.
+ads	Enable Android Binder devices	2026-10-03T04:50:34.3037077Z Check GRUB_DISABLE_OS_PROBER documentation entry.
+ads	Enable Android Binder devices	2026-10-03T04:50:34.3052344Z Adding boot menu entry for UEFI Firmware Settings ...
+ads	Enable Android Binder devices	2026-10-03T04:50:34.3544251Z done
+ads	Enable Android Binder devices	2026-10-03T04:50:34.3858998Z Processing triggers for flash-kernel (3.107ubuntu13~24.04.6) ...
+ads	Enable Android Binder devices	2026-10-03T04:50:34.5836953Z System running in EFI mode, skipping.
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6749793Z 
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6751168Z Running kernel seems to be up-to-date.
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6751584Z 
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6752104Z No services need to be restarted.
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6752313Z 
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6752518Z No containers need to be restarted.
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6752734Z 
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6752977Z No user sessions are running outdated binaries.
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6753271Z 
+ads	Enable Android Binder devices	2026-10-03T04:50:36.6753585Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+ads	Enable Android Binder devices	2026-10-03T04:50:37.9736132Z + sudo modprobe binder_linux
+ads	Start native ARM64 Redroid (fake Redmi device)	﻿2026-10-03T04:50:37.9908774Z ##[group]Run docker pull "$REDROID_IMAGE"
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9909435Z ^[[36;1mdocker pull "$REDROID_IMAGE"^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9909900Z ^[[36;1mdocker run -d --name redroid --privileged \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9910244Z ^[[36;1m  -p 5555:5555 \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9910518Z ^[[36;1m  --dns 8.8.8.8 --dns 1.1.1.1 \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9910865Z ^[[36;1m  "$REDROID_IMAGE" \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9911194Z ^[[36;1m  androidboot.redroid_width=1080 \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9911565Z ^[[36;1m  androidboot.redroid_height=2400 \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9911905Z ^[[36;1m  androidboot.redroid_dpi=420 \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9912590Z ^[[36;1m  androidboot.redroid_gpu_mode=guest \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9913074Z ^[[36;1m  ro.product.model=25060RK16C \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9913378Z ^[[36;1m  ro.product.brand=REDMI \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9913756Z ^[[36;1m  ro.product.manufacturer=Xiaomi \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9914080Z ^[[36;1m  ro.product.name=Redmi\ K80 \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9914467Z ^[[36;1m  ro.product.device=pudding \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9914892Z ^[[36;1m  ro.build.product=pudding \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9915239Z ^[[36;1m  ro.build.flavor=redmi \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9915759Z ^[[36;1m  ro.build.fingerprint=Xiaomi/pudding/pudding:14/UKQ1.230804.001/V14.0.4.0.UJSCN:user/release-keys \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9916357Z ^[[36;1m  ro.miui.ui.version.name=HyperOS2.0 \^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9916705Z ^[[36;1m  ro.product.locale=zh-CN^[[0m
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9991784Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9992409Z env:
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9992743Z   REDROID_IMAGE: redroid/redroid:12.0.0_64only-latest
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:37.9993101Z ##[endgroup]
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:38.3323291Z 12.0.0_64only-latest: Pulling from redroid/redroid
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:38.4245450Z d84d394d90eb: Pulling fs layer
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:40.2535993Z d84d394d90eb: Verifying Checksum
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:40.2536530Z d84d394d90eb: Download complete
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:44.9425687Z d84d394d90eb: Pull complete
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:44.9466378Z Digest: sha256:a6c464bbedcf1dcb67dbf91f329fbb19bee5b50631f0ca6bda6ed7c41b0e64e2
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:44.9478983Z Status: Downloaded newer image for redroid/redroid:12.0.0_64only-latest
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:44.9488557Z docker.io/redroid/redroid:12.0.0_64only-latest
+ads	Start native ARM64 Redroid (fake Redmi device)	2026-10-03T04:50:47.8838756Z ad51fe0e7aee813f5276d6958720d4a2e75841d9077a228094f8c6e1ddfb74ec
+ads	Wait for Android boot	﻿2026-10-03T04:50:48.0835151Z ##[group]Run bash scripts/redroid-boot.sh diagnostics
+ads	Wait for Android boot	2026-10-03T04:50:48.0835768Z ^[[36;1mbash scripts/redroid-boot.sh diagnostics^[[0m
+ads	Wait for Android boot	2026-10-03T04:50:48.0915451Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+ads	Wait for Android boot	2026-10-03T04:50:48.0915944Z ##[endgroup]
+ads	Wait for Android boot	2026-10-03T04:50:48.1800204Z attempt=1 running=true boot=
+ads	Wait for Android boot	2026-10-03T04:50:51.2252056Z attempt=2 running=true boot=
+ads	Wait for Android boot	2026-10-03T04:50:54.2791735Z attempt=3 running=true boot=1
+ads	Wait for Android boot	2026-10-03T04:50:54.3399908Z Android booted; adb device: 25060RK16C
+ads	Probe OAID support in Redroid	﻿2026-10-03T04:50:54.3437698Z ##[group]Run set +e
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3438426Z ^[[36;1mset +e^[[0m
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3438740Z ^[[36;1mbash scripts/probe-oaid.sh diagnostics^[[0m
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3439133Z ^[[36;1mexit 0^[[0m
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3474804Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3475259Z ##[endgroup]
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3833494Z === 已装厂商/OAID 相关包 ===
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3834041Z (无任何厂商 OAID 服务)
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3834379Z 
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3834656Z === 系统服务里有无 OAID ===
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3834997Z (无 OAID 系统服务)
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3835140Z 
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3835496Z === APK 内含的 OAID SDK 类名 ===
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3835776Z apk: 
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3835908Z 
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3836151Z === 设备标识现状 ===
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3836470Z ANDROID_ID: 
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3836703Z brand: 
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3836979Z manufacturer: 
+ads	Probe OAID support in Redroid	2026-10-03T04:50:54.3837226Z fingerprint: 
+ads	Watch daily rewarded ads	﻿2026-10-03T04:50:54.3884161Z ##[group]Run if [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3884868Z ^[[36;1mif [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then^[[0m
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3885371Z ^[[36;1m  echo "ARITYFLOW_USER / ARITYFLOW_PASSWORD must be set"; exit 1^[[0m
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3885785Z ^[[36;1mfi^[[0m
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3886007Z ^[[36;1mset +e^[[0m
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3886345Z ^[[36;1mtimeout --kill-after=15s 100m bash scripts/arityflow-ads.sh \^[[0m
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3886827Z ^[[36;1m  artifacts/ArityFlow.apk diagnostics^[[0m
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3887157Z ^[[36;1mexit $?^[[0m
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3922353Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3922781Z env:
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3923500Z   ARITY_USER: ***
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3923849Z   ARITY_PASS: ***
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3924427Z   ARITY_CODE: ***
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3924753Z   MAX_ADS: 3
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3925021Z   ADS_ATTEMPTS: 16
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3925286Z   ADS_RETRY_WAIT: 60
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.3925532Z ##[endgroup]
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.4033912Z [ad] install apk
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.5478615Z Performing Streamed Install
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.5509002Z Success
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.6772741Z [ad] launch app
+ads	Watch daily rewarded ads	2026-10-03T04:50:54.7053735Z Starting: Intent { cmp=com.klkjapp.www/com.lt.app.MainActivity }
+ads	Watch daily rewarded ads	2026-10-03T04:51:24.7304484Z [ad] resumed:   ResumedActivity: ActivityRecord{acad1c5 u0 com.klkjapp.www/com.lt.app.MainActivity t11}
+ads	Watch daily rewarded ads	2026-10-03T04:51:25.0043630Z [ad] app pid: 1836
+ads	Watch daily rewarded ads	2026-10-03T04:51:25.0044334Z [ad] net check:
+ads	Watch daily rewarded ads	2026-10-03T04:51:25.0055581Z --- ping 8.8.8.8
+ads	Watch daily rewarded ads	2026-10-03T04:51:28.0179247Z --- 8.8.8.8 ping statistics ---
+ads	Watch daily rewarded ads	2026-10-03T04:51:28.0180007Z 1 packets transmitted, 0 received, 100% packet loss, time 0ms
+ads	Watch daily rewarded ads	2026-10-03T04:51:28.0180314Z 
+ads	Watch daily rewarded ads	2026-10-03T04:51:28.0182708Z --- DNS 解析 sigmob（广告平台，字节系）
+ads	Watch daily rewarded ads	2026-10-03T04:51:31.0615850Z --- dc.sigmob.cn ping statistics ---
+ads	Watch daily rewarded ads	2026-10-03T04:51:31.0619525Z 1 packets transmitted, 0 received, 100% packet loss, time 0ms
+ads	Watch daily rewarded ads	2026-10-03T04:51:31.0620019Z 
+ads	Watch daily rewarded ads	2026-10-03T04:51:34.0756444Z --- tm1.sigmob.cn ping statistics ---
+ads	Watch daily rewarded ads	2026-10-03T04:51:34.0757212Z 1 packets transmitted, 0 received, 100% packet loss, time 0ms
+ads	Watch daily rewarded ads	2026-10-03T04:51:34.0757693Z 
+ads	Watch daily rewarded ads	2026-10-03T04:51:34.0758287Z --- DNS 解析自有后端
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7018881Z --- sxjdjet6.cn.speedonline.xyz ping statistics ---
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7023195Z 1 packets transmitted, 0 received, 100% packet loss, time 0ms
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7026039Z 
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7026853Z --- 网络属性
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7168654Z [init.svc.mdnsd]: [running]
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7169681Z [init.svc_debug_pid.mdnsd]: [271]
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7170372Z [net.bt.name]: [Android]
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7171366Z [net.qtaguid_enabled]: [1]
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7171765Z [net.tcp_def_init_rwnd]: [60]
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7172304Z [ro.boottime.mdnsd]: [768318516973]
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7172969Z --- 是否有 GMS（很多广告 SDK 需要）
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7370436Z (无 GMS / 无 Play Store)
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7370809Z --- 设备标识
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7592751Z android_id: 879670f8401e4df8
+ads	Watch daily rewarded ads	2026-10-03T04:51:57.7593402Z imei(bridge): 见下方 get-oaid
+ads	Watch daily rewarded ads	2026-10-03T04:51:58.0456174Z [ad] dismiss tips: dismissed
+ads	Watch daily rewarded ads	2026-10-03T04:52:00.2437213Z [ad] login: submitted
+ads	Watch daily rewarded ads	2026-10-03T04:52:07.5913731Z scripts/arityflow-ads.sh: line 361: diagnostics/login-err.log: No such file or directory
+ads	Watch daily rewarded ads	2026-10-03T04:52:07.5924159Z [ad] login errors: 0
+ads	Watch daily rewarded ads	2026-10-03T04:52:07.9759047Z [ad] status: {"url":"https://afapp.ahne.cn/#/home","hasLogin":false,"hasAdBtn":true,"adBtnText":"看广告\n剩 3/3 次","hasTips":false,"bodySnippet":"首页 *** 10 月 3 日 星期六 账户余额 default 🍀 137 已用 🍀 0.5 · 请求 48 次 签到 看广告 剩 3/3 次 获取记录 今日消耗 🍀 0 RPM 速率 0 TPM 速率 0 AI 聊天 AI 生图 API 密钥 调用日志 可用模型（52） [免费]DeepSeek-V4-Flash [免费]DeepSeek-V4-Flash-Vision-Exp [免费"}
+ads	Watch daily rewarded ads	2026-10-03T04:52:12.1135288Z [ad] ads reward uid: 14231  (reward/latest: {"data":{"quota":123560},"success":true})
+ads	Watch daily rewarded ads	2026-10-03T04:52:12.5934137Z [ad] tobid probe: {"exists":true,"methods":[{"n":"requestPermissionIfNecessary","type":"function"},{"n":"reward","type":"function"},{"n":"interstitial","type":"function"},{"n":"banner","type":"function"},{"n":"ksTube","type":"function"},{"n":"setListener","type":"function"},{"n":"removeListener","type":"function"}]}
+ads	Watch daily rewarded ads	2026-10-03T04:52:14.9228307Z [ad] ad-network probe: [{"url":"https://dc.sigmob.cn/","ok":true,"type":"opaque","status":0,"ms":943},{"url":"https://tm.sigmob.cn/","ok":true,"type":"opaque","status":0,"ms":834},{"url":"https://af.52kele.cn/","ok":true,"type":"opaque","status":0,"ms":418}]
+ads	Watch daily rewarded ads	2026-10-03T04:52:15.0616432Z [ad] bridge methods: ["abcPay","abcPayAppInstalled","action","actionButton","agreed","agreement","aliPay","alipayLogin","appDownloads","appInfo","appList","appSettings","backToHome","bottomSheet","cacheSize","callLog","canGoBack","canGoForward","canLaunch","captureWebPage","checkCamera","clearCache","clearCookie","close","contactAll","contactOne","debug","deviceInfo","evalInNavbar","evalInNavbarAction","evalInToolbar","exit","getClipboardText","getDeviceId","getIDFA","getIMEI","getInstallId","getNavigationBar","getOAID","getOAIDv2","getOption","getScreenOrientation","getSettingState","getStatusBar","getTheme","getTitleBar","home","icbcPay","isReady","launch","launchPackage","miniProgram","net","netUploadFile","onAgree","onAppEnterBackground","onAppEnterForeground","onBackPressed","onClose","onMenuAction","onMenuScan","onMenuShareFriend","onMenuShareQQ","onMenuShareQZone","onMenuShareTimeline","open","openInBrowser","openSetting","pay","presentBrowser","print","progress","qqLogin","ready","requestPermissions","restart","richAlert","richDialog","saveImageToAlbum","saveImagesToAlbum","saveScreenshotToAlbum","saveVideoToAlbum","scan","scanFromAlbum","scanFromUrl","setClipboardText","setMiniProgramResult","setNavigationBar","setOption","setOptions","setScreenOrientation","setStatusBar","setTheme","setTitleBar","share","shareImage","shareImages","shareMusic","shareQqMiniProgram","shareText","shareVideo","shareWxMiniProgram","showImages","showSplash","sidebarClose","sidebarHeader","sidebarIsOpen","sidebarOpen","sysShare","toast","uiActions","uiNavigation","uiRefresh","uiShare","unionPay","unionPayAppInstalled","unionSeInfo","upgrade","userAgreement","userPrivacy","vibrate","wxAppInstalled","wxLaunchMiniProgram","wxLogin","wxOpenBusinessView","wxOpenCustomerServiceChat","wxOpenLaunchAppExtinfo","wxPay","wxSubscribeMsg"]
+ads	Watch daily rewarded ads	2026-10-03T04:52:15.1990136Z [ad] getloadFailMessage: NO_METHOD
+ads	Watch daily rewarded ads	2026-10-03T04:52:15.3727320Z [ad] device id: {"id":"59187220ed1d6d74","source":"getIMEI"}
+ads	Watch daily rewarded ads	2026-10-03T04:52:15.3965821Z [ad] using device oaid: 59187220ed1d6d74 (source)
+ads	Watch daily rewarded ads	2026-10-03T04:52:20.7551791Z [ad] baselines: reward_latest=123560 viewed_today=0 account_quota=1.37212
+ads	Watch daily rewarded ads	2026-10-03T04:52:20.7567367Z [ad] ===== round 1/3 =====
+ads	Watch daily rewarded ads	2026-10-03T04:52:20.9963951Z [ad] balance before: 137
+ads	Watch daily rewarded ads	2026-10-03T04:52:21.1339839Z [ad] attempt 1/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T04:53:49.7660168Z [ad] attempt 2/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T04:55:18.4259034Z [ad] attempt 3/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T04:56:47.1191766Z [ad] attempt 4/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T04:58:15.7541438Z [ad] attempt 5/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T04:59:44.3953087Z [ad] attempt 6/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:01:13.1209720Z [ad] attempt 7/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:02:41.8096372Z [ad] attempt 8/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:04:10.5141750Z [ad] attempt 9/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:05:39.1971542Z [ad] attempt 10/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:07:07.8681872Z [ad] attempt 11/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:08:36.5570404Z [ad] attempt 12/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:10:05.2207685Z [ad] attempt 13/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:11:33.8828722Z [ad] attempt 14/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:13:02.5220046Z [ad] attempt 15/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:14:31.1555849Z [ad] attempt 16/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:15:59.6439442Z [ad] round 1: 16 attempts all got no ad fill (60s apart)
+ads	Watch daily rewarded ads	2026-10-03T05:15:59.7651886Z [ad] logcat -> 16272 lines full, 88 filtered
+ads	Watch daily rewarded ads	2026-10-03T05:16:00.1196554Z [ad] retry in 60s (no long cooldown: nothing was credited)
+ads	Watch daily rewarded ads	2026-10-03T05:17:00.1210600Z [ad] ===== round 2/3 =====
+ads	Watch daily rewarded ads	2026-10-03T05:17:00.4118374Z [ad] balance before: 137
+ads	Watch daily rewarded ads	2026-10-03T05:17:00.5527390Z [ad] attempt 1/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:18:29.2325409Z [ad] attempt 2/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:19:57.9085226Z [ad] attempt 3/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:21:26.5852136Z [ad] attempt 4/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:22:55.2473045Z [ad] attempt 5/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:24:23.8953095Z [ad] attempt 6/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:25:52.5355118Z [ad] attempt 7/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:27:21.2181652Z [ad] attempt 8/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:28:49.8612704Z [ad] attempt 9/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:30:18.4999570Z [ad] attempt 10/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:31:47.1454767Z [ad] attempt 11/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:33:15.8777705Z [ad] attempt 12/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:34:44.5696590Z [ad] attempt 13/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:36:13.2518056Z [ad] attempt 14/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:37:41.9658411Z [ad] attempt 15/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:39:10.6654611Z [ad] attempt 16/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:40:39.1730930Z [ad] round 2: 16 attempts all got no ad fill (60s apart)
+ads	Watch daily rewarded ads	2026-10-03T05:40:39.3112455Z [ad] logcat -> 17683 lines full, 117 filtered
+ads	Watch daily rewarded ads	2026-10-03T05:40:39.6611672Z [ad] retry in 60s (no long cooldown: nothing was credited)
+ads	Watch daily rewarded ads	2026-10-03T05:41:39.6626395Z [ad] ===== round 3/3 =====
+ads	Watch daily rewarded ads	2026-10-03T05:41:39.9872027Z [ad] balance before: 137
+ads	Watch daily rewarded ads	2026-10-03T05:41:40.1503053Z [ad] attempt 1/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:43:08.8748256Z [ad] attempt 2/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:44:37.5809368Z [ad] attempt 3/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:46:06.2921832Z [ad] attempt 4/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:47:34.9889083Z [ad] attempt 5/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:49:03.6837186Z [ad] attempt 6/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:50:32.3621529Z [ad] attempt 7/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:52:01.0457407Z [ad] attempt 8/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:53:29.7280230Z [ad] attempt 9/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:54:58.4144272Z [ad] attempt 10/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:56:27.0902367Z [ad] attempt 11/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:57:55.7765936Z [ad] attempt 12/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T05:59:24.4265358Z [ad] attempt 13/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T06:00:53.0764068Z [ad] attempt 14/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T06:02:21.7288609Z [ad] attempt 15/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T06:03:50.3784255Z [ad] attempt 16/16: clicked:看广告 剩 3/3 次
+ads	Watch daily rewarded ads	2026-10-03T06:05:18.8776123Z [ad] round 3: 16 attempts all got no ad fill (60s apart)
+ads	Watch daily rewarded ads	2026-10-03T06:05:19.0237593Z [ad] logcat -> 18972 lines full, 129 filtered
+ads	Watch daily rewarded ads	2026-10-03T06:05:19.3741329Z [ad] completed 0 ad(s)
+ads	Watch daily rewarded ads	2026-10-03T06:05:22.7636993Z [ad] final ad status: {"ad_enabled":true,"daily_limit":3,"remaining":3,"viewed_today":0}
+ads	Upload evidence	﻿2026-10-03T06:05:22.7732816Z ##[group]Run actions/upload-artifact@v4
+ads	Upload evidence	2026-10-03T06:05:22.7733134Z with:
+ads	Upload evidence	2026-10-03T06:05:22.7733325Z   name: arityflow-ads-37097829748
+ads	Upload evidence	2026-10-03T06:05:22.7733560Z   path: diagnostics/
+ads	Upload evidence	2026-10-03T06:05:22.7733767Z   if-no-files-found: warn
+ads	Upload evidence	2026-10-03T06:05:22.7733992Z   retention-days: 7
+ads	Upload evidence	2026-10-03T06:05:22.7734192Z   compression-level: 6
+ads	Upload evidence	2026-10-03T06:05:22.7734394Z   overwrite: false
+ads	Upload evidence	2026-10-03T06:05:22.7734592Z   include-hidden-files: false
+ads	Upload evidence	2026-10-03T06:05:22.7734821Z ##[endgroup]
+ads	Upload evidence	2026-10-03T06:05:22.9145833Z (node:29855) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+ads	Upload evidence	2026-10-03T06:05:22.9146653Z (Use `node --trace-deprecation ...` to show where the warning was created)
+ads	Upload evidence	2026-10-03T06:05:22.9227124Z With the provided path, there will be 18 files uploaded
+ads	Upload evidence	2026-10-03T06:05:22.9231978Z Artifact name is valid!
+ads	Upload evidence	2026-10-03T06:05:22.9232529Z Root directory input is valid!
+ads	Upload evidence	2026-10-03T06:05:23.2237556Z Beginning upload of artifact content to blob storage
+ads	Upload evidence	2026-10-03T06:05:23.3806693Z (node:29855) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+ads	Upload evidence	2026-10-03T06:05:23.5099556Z Uploaded bytes 3174966
+ads	Upload evidence	2026-10-03T06:05:23.5292946Z Finished uploading artifact content to blob storage!
+ads	Upload evidence	2026-10-03T06:05:23.5294078Z SHA256 digest of uploaded artifact zip is 822f8990628118e5c2f452f6239c47f156f124f596db60b93c6251f578fba7ac
+ads	Upload evidence	2026-10-03T06:05:23.5295339Z Finalizing artifact upload
+ads	Upload evidence	2026-10-03T06:05:23.7220207Z Artifact arityflow-ads-37097829748.zip successfully finalized. Artifact ID 11266377413
+ads	Upload evidence	2026-10-03T06:05:23.7221117Z Artifact arityflow-ads-37097829748 has been successfully uploaded! Final size is 3174966 bytes. Artifact ID is 11266377413
+ads	Upload evidence	2026-10-03T06:05:23.7227212Z Artifact download URL: https://github.com/***v/web-auto/actions/runs/37097829748/artifacts/11266377413
+ads	Post Run actions/setup-node@v4	﻿2026-10-03T06:05:23.7389621Z Post job cleanup.
+ads	Post Run actions/setup-node@v4	2026-10-03T06:05:23.8440070Z (node:29867) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+ads	Post Run actions/setup-node@v4	2026-10-03T06:05:23.8440952Z (Use `node --trace-deprecation ...` to show where the warning was created)
+ads	Post Run actions/checkout@v4	﻿2026-10-03T06:05:23.8571909Z Post job cleanup.
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9314778Z [command]/usr/bin/git version
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9359135Z git version 2.55.0
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9398147Z Temporarily overriding HOME='/home/runner/work/_temp/7795d1e3-f40e-482a-ae70-0e073d163780' before making global git config changes
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9405536Z Adding repository directory to the temporary git global config as a safe directory
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9406248Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/web-auto/web-auto
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9444931Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9486916Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9729603Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9757046Z http.https://github.com/.extraheader
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9769586Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:23.9821692Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:24.0016574Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+ads	Post Run actions/checkout@v4	2026-10-03T06:05:24.0051724Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+ads	Complete job	﻿2026-10-03T06:05:24.0382246Z Cleaning up orphan processes
+ads	Complete job	2026-10-03T06:05:24.1351307Z Terminate orphan process: pid (11608) (adb)
+ads	Complete job	2026-10-03T06:05:24.1498348Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache/restore@v4, actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
