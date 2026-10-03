@@ -13,6 +13,16 @@ on:
         required: false
         default: '3'
         type: string
+      ads_attempts:
+        description: Clicks on 「看广告」 per round (Sigmob has only 1 slot, each click = one bid)
+        required: false
+        default: '16'
+        type: string
+      ads_retry_wait:
+        description: Seconds between bids (too short triggers rate limiting)
+        required: false
+        default: '60'
+        type: string
 
 permissions:
   contents: read
@@ -25,7 +35,7 @@ jobs:
   ads:
     # ARM64 原生 runner（免费账号可用），Redroid 容器跑 arm64 Android
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -111,13 +121,15 @@ jobs:
           ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
           MAX_ADS: ${{ inputs.max_ads || '3' }}
+          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '16' }}
+          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '60' }}
         shell: bash
         run: |
           if [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then
             echo "ARITYFLOW_USER / ARITYFLOW_PASSWORD must be set"; exit 1
           fi
           set +e
-          timeout --kill-after=15s 80m bash scripts/arityflow-ads.sh \
+          timeout --kill-after=15s 100m bash scripts/arityflow-ads.sh \
             artifacts/ArityFlow.apk diagnostics
           exit $?
 

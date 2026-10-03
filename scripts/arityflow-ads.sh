@@ -12,6 +12,8 @@ mkdir -p "$out"
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
 MAX_ADS="${MAX_ADS:-3}"
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-16}"     # 每轮点击「看广告」的次数（Sigmob 只有 1 个广告位，每次点击=一次独立竞价）
+ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-60}" # 两次竞价之间的间隔，太短会被限流
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
 
 # 指定唯一设备（ARM runner 上可能有多设备/残留）
@@ -261,10 +263,24 @@ done
 pid="$(app_pid)"
 echo "[ad] app pid: $pid"
 
-# 容器内网络连通性诊断（Redroid 能否访问后端 API）
+# 容器内网络连通性诊断（Redroid 能否访问后端 API 和广告平台）
 echo "[ad] net check:"
-adb_quick shell "ping -c1 -W2 8.8.8.8" 2>/dev/null | tail -2 | tee -a "$out/net-check.txt" || true
-adb_quick shell "getprop | grep -iE 'dns|net.eth0'" 2>/dev/null | head -5 | tee -a "$out/net-check.txt" || true
+{
+  echo "--- ping 8.8.8.8"
+  adb_quick ping -c 1 -W 3 8.8.8.8 2>&1 | tail -3
+  echo "--- DNS 解析 sigmob（广告平台，字节系）"
+  adb_quick ping -c 1 -W 3 dc.sigmob.cn 2>&1 | tail -3
+  adb_quick ping -c 1 -W 3 tm.sigmob.cn 2>&1 | tail -3
+  echo "--- DNS 解析自有后端"
+  adb_quick ping -c 1 -W 3 af.52kele.cn 2>&1 | tail -3
+  echo "--- 网络属性"
+  adb_quick getprop 2>/dev/null | grep -iE 'dns|eth0|net\.' | head -8
+  echo "--- 是否有 GMS（很多广告 SDK 需要）"
+  adb_quick pm list packages 2>/dev/null | grep -iE 'com.google.android.gms|vending|com.android.vending' || echo "(无 GMS / 无 Play Store)"
+  echo "--- 设备标识"
+  echo "android_id: $(adb_quick settings get secure android_id 2>/dev/null)"
+  echo "imei(bridge): 见下方 get-oaid"
+} 2>&1 | tee -a "$out/net-check.txt" || true
 
 # 关掉"广告权限提示"弹窗（首次启动才有）
 echo "[ad] dismiss tips: $(cdp dismiss-tips)"
@@ -323,11 +339,21 @@ for round in $(seq 1 "$MAX_ADS"); do
   bal_before="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).balance||'')}catch{console.log('')}})" 2>/dev/null)"
   echo "[ad] balance before: $bal_before"
 
-  # 广告素材填充是概率性的（同样环境有时拿到快手广告、有时 12 次全 700000 无广告返回），
-  # 靠高频重试提高命中率；700000 错误通常几秒内就返回，不必等满 60 秒。
-  got=0
-  for attempt in $(seq 1 8); do
-    echo "[ad] attempt $attempt: $(cdp click-ad)"
+  # SDK 全量日志：700000 只是聚合错误，Sigmob 真正的拒绝原因在这里面。
+# 之前 grep 太窄 + tail -30 把关键行截掉了，这里按广告相关 tag 全量抓取。
+dump_ad_log() {
+  adb_quick logcat -d -v time 2>/dev/null \
+    | grep -iE 'sigmob|smad|wxad|\badn\b|no_?bid|no_?fill|700000|onVideoAd|RewardVideo|adload|adLoad|ecpm|tobid|slot|lqm|ksTube|gdt|bugly' \
+    > "$out/ad-sdk-full-r${1}.log" 2>/dev/null || true
+  echo "[ad] logcat -> $out/ad-sdk-full-r${1}.log ($(wc -l < "$out/ad-sdk-full-r${1}.log" 2>/dev/null || echo 0) lines)"
+}
+
+# 广告素材填充是概率性的：Sigmob 的 700000 既可能是库存问题，也可能是它把这个
+# 容器环境判成无效设备后静默不返填充。两种都只能靠反复试，所以重试次数给足、
+# 间隔保持 60s（实测 8s 连发会触发限流）。
+got=0
+  for attempt in $(seq 1 "$ADS_ATTEMPTS"); do
+    echo "[ad] attempt $attempt/$ADS_ATTEMPTS: $(cdp click-ad)"
     sleep 4
     handle_perm_dialog || true
     # 轮询等待广告浮层出现（最多 25 秒）
@@ -339,14 +365,12 @@ for round in $(seq 1 "$MAX_ADS"); do
     done
     if [[ "$opened" == "1" ]]; then got=1; break; fi
     adb_run input keyevent 4 >/dev/null 2>&1 || true
-    # 重试间隔必须够长：实测 8 秒连发会被广告平台限流（60 次全 700000），
-    # 而 20 秒间隔能正常拿到素材。etalien 也是每次间隔几分钟。
-    sleep 60
+    sleep "$ADS_RETRY_WAIT"
   done
 
   if [[ "$got" != "1" ]]; then
-    echo "[ad] round $round: 8 attempts all got no ad fill (60s apart)"
-    adb_quick logcat -d 2>/dev/null | grep -iE "no.?bid|no_?fill|RewardVideo|onAdError|ad.*fail|sigmob|gdt|oaid|imei" | tail -30 > "$out/ad-sdk-r${round}.log" || true
+    echo "[ad] round $round: $ADS_ATTEMPTS attempts all got no ad fill (${ADS_RETRY_WAIT}s apart)"
+    dump_ad_log "$round"
     screenshot "round${round}-noad"
     if [[ "$round" -lt "$MAX_ADS" ]]; then echo "[ad] cooldown 240s"; sleep 240; fi
     continue
