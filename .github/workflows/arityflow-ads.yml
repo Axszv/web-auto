@@ -15,12 +15,12 @@ on:
       max_ads:
         description: Max ads to watch (0 = only report balance)
         required: false
-        default: '1'
+        default: '3'
         type: string
       ads_attempts:
         description: Clicks on 「看广告」 per round (Sigmob has only 1 slot, each click = one bid)
         required: false
-        default: '4'
+        default: '16'
         type: string
       ads_retry_wait:
         description: Seconds between bids (too short triggers rate limiting)
@@ -152,9 +152,6 @@ jobs:
             androidboot.redroid_height=2400 \
             androidboot.redroid_dpi=420 \
             androidboot.redroid_gpu_mode=guest \
-            ro.build.tags=release-keys \
-            ro.build.type=user \
-            ro.secure=1 \
             ro.product.model=25060RK16C \
             ro.product.brand=REDMI \
             ro.product.manufacturer=Xiaomi \
@@ -205,8 +202,8 @@ jobs:
           ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
           ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
-          MAX_ADS: ${{ inputs.max_ads || '1' }}
-          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '4' }}
+          MAX_ADS: ${{ inputs.max_ads || '3' }}
+          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '16' }}
           ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '90' }}
         shell: bash
         run: |
