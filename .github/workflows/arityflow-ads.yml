@@ -100,20 +100,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "$SINGBOX_CONFIG" > singbox.json
+          # 注入访问日志。默认配置不打日志的话，容器流量到底有没有经过代理
+          # 完全看不出来 —— 这正是要验证的事，所以必须开。
+          echo "$SINGBOX_CONFIG" | node -e "
+            const fs = require('fs');
+            let cfg = JSON.parse(fs.readFileSync(0, 'utf8'));
+            cfg.log = Object.assign({}, cfg.log, { level: 'info', timestamp: true });
+            fs.writeFileSync('singbox.json', JSON.stringify(cfg, null, 2));
+          "
           SINGBOX_VER="1.13.16"
           curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz" -o /tmp/sing-box.tar.gz
           tar -xzf /tmp/sing-box.tar.gz -C /tmp
           /tmp/sing-box/sing-box run -c singbox.json > /tmp/sing-box.log 2>&1 &
           echo $! > /tmp/singbox.pid
-          for _ in $(seq 1 15); do
-            if curl -s --max-time 5 --proxy http://127.0.0.1:1080 https://api.ipify.org >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-          done
-          echo "proxy egress IP: $(curl -s --max-time 15 --proxy http://127.0.0.1:1080 https://api.ipify.org || echo FAIL)"
-          echo "direct egress IP: $(curl -s --max-time 15 https://api.ipify.org || echo FAIL)"
+          sleep 5
+
+          # 端口是否在监听
+          if ! kill -0 "$(cat /tmp/singbox.pid)" 2>/dev/null; then
+            echo "sing-box 进程已退出，日志："; cat /tmp/sing-box.log; exit 1
+          fi
+          echo "sing-box alive, inbound: $(node -e "
+            const c=JSON.parse(require('fs').readFileSync('singbox.json','utf8'));
+            console.log((c.inbounds||[]).map(i=>i.type+':'+i.listen+':'+i.listen_port).join(','));
+          ")"
+
+          # 出口 IP：ipify 有时走不通，用自有后端再测一次
+          echo "proxy egress ipify : $(curl -s --max-time 20 --proxy http://127.0.0.1:1080 https://api.ipify.org || echo FAIL)"
+          echo "proxy egress backend: $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --proxy http://127.0.0.1:1080 https://af.52kele.cn/api/status || echo FAIL)"
+          echo "direct egress ipify: $(curl -s --max-time 20 https://api.ipify.org || echo FAIL)"
 
       - name: Enable Android Binder devices
         shell: bash
@@ -178,9 +192,12 @@ jobs:
           adb reverse tcp:1080 tcp:1080
           adb shell settings put global http_proxy 127.0.0.1:1080
           echo "container proxy: $(adb shell settings get global http_proxy | tr -d '\r')"
-          echo "--- 容器内出口 IP（应等于代理 IP，而不是 runner IP）---"
-          echo "via-proxy: $(adb shell 'curl -s --max-time 15 --proxy http://127.0.0.1:1080 https://api.ipify.org 2>/dev/null || echo NOCURL' | tr -d '\r')"
-          echo "runner-ip: $(curl -s --max-time 10 https://api.ipify.org)"
+          echo "runner-ip (直连出口): $(curl -s --max-time 10 https://api.ipify.org)"
+          # Redroid 里没有 curl，所以不能在容器内直接查出口 IP。
+          # 改用 sing-box 的访问日志验证：下面广告阶段跑完后，
+          # 日志里若出现来自容器网段的连接，就说明 adb reverse + 系统代理生效了。
+          echo "--- 容器内 curl 不存在，出口 IP 改由 sing-box 访问日志验证 ---"
+          adb shell 'which curl || echo "(Redroid 无 curl，符合预期)"'
           exit 0
 
       - name: Watch daily rewarded ads
