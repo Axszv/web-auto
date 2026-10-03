@@ -317,6 +317,27 @@ adb_run settings put secure android_id "$STABLE_ANDROID_ID" >/dev/null 2>&1 || t
 adb_run settings put secure limit_ad_tracking 0 >/dev/null 2>&1 || true
 echo "[ad] device identity: android_id=$(adb_quick settings get secure android_id 2>/dev/null | tr -d '\r') limit_ad_tracking=$(adb_quick settings get secure limit_ad_tracking 2>/dev/null | tr -d '\r')"
 
+# Root / 模拟器痕迹自查。广告 SDK 的反作弊常把这些当一票否决项 ——
+# 容器本身就是 --privileged 起的，痕迹藏不干净，但至少要知道有哪些。
+{
+  echo "--- root 痕迹"
+  for f in /system/xbin/su /system/bin/su /sbin/su /su/bin/su /system/app/Superuser.apk; do
+    adb_quick ls "$f" >/dev/null 2>&1 && echo "存在: $f"
+  done
+  echo "--- 关键属性（SDK 会读）"
+  for p in ro.debuggable ro.secure ro.build.tags ro.build.type ro.kernel.qemu \
+           ro.hardware ro.product.cpu.abi ro.build.characteristics ro.boot.verifiedbootstate; do
+    printf '%s = %s\n' "$p" "$(adb_quick getprop "$p" 2>/dev/null | tr -d '\r')"
+  done
+  echo "--- 已装可疑包（root/模拟器/抓包）"
+  adb_quick pm list packages 2>/dev/null \
+    | grep -iE 'supersu|magisk|frida|xposed|charles|proxy|virtual|emulator|genymotion|bluestacks|nox|memu|ldplayer' \
+    || echo "(无)"
+  echo "--- SELinux / 容器痕迹"
+  echo "selinux: $(adb_quick getenforce 2>/dev/null | tr -d '\r')"
+  adb_quick getprop 2>/dev/null | grep -iE 'docker|container|redroid|qemu' | head -8
+} 2>&1 | tee "$out/emulator-traces.txt" | sed 's/^/[env] /'
+
 # 预授予权限，避免运行时弹原生权限框挡住广告
 for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION READ_PHONE_STATE \
             READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE READ_MEDIA_IMAGES; do

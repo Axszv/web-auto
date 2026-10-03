@@ -95,6 +95,9 @@ jobs:
             androidboot.redroid_height=2400 \
             androidboot.redroid_dpi=420 \
             androidboot.redroid_gpu_mode=guest \
+            ro.build.tags=release-keys \
+            ro.build.type=user \
+            ro.secure=1 \
             ro.product.model=25060RK16C \
             ro.product.brand=REDMI \
             ro.product.manufacturer=Xiaomi \
