@@ -198,7 +198,7 @@ for round in $(seq 1 "$MAX_ADS"); do
   # 广告素材填充是概率性的（同样环境有时拿到快手广告、有时 12 次全 700000 无广告返回），
   # 靠高频重试提高命中率；700000 错误通常几秒内就返回，不必等满 60 秒。
   got=0
-  for attempt in $(seq 1 20); do
+  for attempt in $(seq 1 8); do
     echo "[ad] attempt $attempt: $(cdp click-ad)"
     sleep 4
     handle_perm_dialog || true
@@ -211,11 +211,13 @@ for round in $(seq 1 "$MAX_ADS"); do
     done
     if [[ "$opened" == "1" ]]; then got=1; break; fi
     adb_run input keyevent 4 >/dev/null 2>&1 || true
-    sleep 8
+    # 重试间隔必须够长：实测 8 秒连发会被广告平台限流（60 次全 700000），
+    # 而 20 秒间隔能正常拿到素材。etalien 也是每次间隔几分钟。
+    sleep 60
   done
 
   if [[ "$got" != "1" ]]; then
-    echo "[ad] round $round: 20 attempts all got no ad fill"
+    echo "[ad] round $round: 8 attempts all got no ad fill (60s apart)"
     adb_quick logcat -d 2>/dev/null | grep -iE "no.?bid|no_?fill|RewardVideo|onAdError|ad.*fail|sigmob|gdt|oaid|imei" | tail -30 > "$out/ad-sdk-r${round}.log" || true
     screenshot "round${round}-noad"
     if [[ "$round" -lt "$MAX_ADS" ]]; then echo "[ad] cooldown 240s"; sleep 240; fi

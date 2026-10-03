@@ -2,12 +2,10 @@ name: ArityFlow Daily Ads (Redroid ARM64)
 
 on:
   schedule:
-    # UTC 20:17 = 北京 04:17，加排队延迟约实际 UTC 21:30 执行。
-    # 实测广告素材填充有强时段性：UTC 21-22 点能拿到快手广告素材，
-    # UTC 22 点后 60 次重试全为 700000「无广告返回」。故选在此时段。
+    # UTC 01:17 = 北京 09:17。
     # a-n-y-router.top 广告额度 +24.7/次、每天 3 次
     # 需真实播放（Redroid ARM64 + 伪装真机才有素材），纯 HTTP 无法发额度
-    - cron: '17 20 * * *'
+    - cron: '17 1 * * *'
   workflow_dispatch:
     inputs:
       max_ads:
