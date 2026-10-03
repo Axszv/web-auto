@@ -71,8 +71,49 @@ jobs:
         run: |
           mkdir -p diagnostics
           sudo apt-get update
-          sudo apt-get install -y adb jq
+          sudo apt-get install -y adb jq curl
           uname -a | tee diagnostics/host.txt
+
+      # 可选的本地代理（sing-box）。当前 SINGBOX_CONFIG 里的节点出口在美国，
+      # 而实测真机走美国 IP 就是「当前无广告」、走国内 IP 才出货 —— 所以要让
+      # CI 真正出货，得把出口换成境内节点。这一步只是把代理跑起来，
+      # 换节点只需更新 SINGBOX_CONFIG secret，不用改任何流程。
+      # 用 step output 而不是 workflow 级 env 来判断，避免 secret 对所有 action 可见。
+      - name: Check proxy availability
+        id: proxycheck
+        env:
+          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
+        shell: bash
+        run: |
+          if [[ -n "$SINGBOX_CONFIG" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "proxy config found"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "no proxy config — container will use runner IP directly"
+          fi
+
+      - name: Start sing-box proxy
+        if: steps.proxycheck.outputs.enabled == 'true'
+        env:
+          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$SINGBOX_CONFIG" > singbox.json
+          SINGBOX_VER="1.13.16"
+          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz" -o /tmp/sing-box.tar.gz
+          tar -xzf /tmp/sing-box.tar.gz -C /tmp
+          /tmp/sing-box/sing-box run -c singbox.json > /tmp/sing-box.log 2>&1 &
+          echo $! > /tmp/singbox.pid
+          for _ in $(seq 1 15); do
+            if curl -s --max-time 5 --proxy http://127.0.0.1:1080 https://api.ipify.org >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          echo "proxy egress IP: $(curl -s --max-time 15 --proxy http://127.0.0.1:1080 https://api.ipify.org || echo FAIL)"
+          echo "direct egress IP: $(curl -s --max-time 15 https://api.ipify.org || echo FAIL)"
 
       - name: Enable Android Binder devices
         shell: bash
@@ -122,6 +163,26 @@ jobs:
           bash scripts/probe-oaid.sh diagnostics
           exit 0
 
+      # 让容器内的 App 走宿主机的 sing-box。
+      # Android 里的 App 只认系统级 HTTP 代理（settings global http_proxy），
+      # 而容器里的 127.0.0.1 指向容器自己，所以要用 adb reverse 把容器的 1080
+      # 反向隧道到宿主机的 1080。Redroid 是 --privileged，这条能生效。
+      - name: Route container traffic through proxy
+        if: steps.proxycheck.outputs.enabled == 'true'
+        env:
+          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
+        shell: bash
+        run: |
+          set +e
+          export ANDROID_SERIAL=127.0.0.1:5555
+          adb reverse tcp:1080 tcp:1080
+          adb shell settings put global http_proxy 127.0.0.1:1080
+          echo "container proxy: $(adb shell settings get global http_proxy | tr -d '\r')"
+          echo "--- 容器内出口 IP（应等于代理 IP，而不是 runner IP）---"
+          echo "via-proxy: $(adb shell 'curl -s --max-time 15 --proxy http://127.0.0.1:1080 https://api.ipify.org 2>/dev/null || echo NOCURL' | tr -d '\r')"
+          echo "runner-ip: $(curl -s --max-time 10 https://api.ipify.org)"
+          exit 0
+
       - name: Watch daily rewarded ads
         env:
           ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
@@ -155,3 +216,8 @@ jobs:
           path: diagnostics/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Stop proxy
+        if: always() && steps.proxycheck.outputs.enabled == 'true'
+        shell: bash
+        run: kill $(cat /tmp/singbox.pid) 2>/dev/null || true
