@@ -67,11 +67,46 @@ enter_or_exit_fullscreen() {
 ui_dump() { adb_quick uiautomator dump "/sdcard/ui.xml" >/dev/null 2>&1 || true
             adb exec-out cat /sdcard/ui.xml 2>/dev/null; }
 
+# Android 沉浸式模式的系统提示「目前处于全屏模式，要退出请从顶部向下滑动 / 知道了」
+# 会一直叠在广告上方。实测截图里它占掉了顶部 22% 屏，每次广告拉起都重新出现。
+# 每次进入广告先点掉它，否则会一直挡着，也容易被后续手势误触。
+dismiss_immersive_tip() {
+  local xml xy
+  xml="$(ui_dump)"
+  [[ -z "$xml" ]] && return 1
+  xy="$(node -e "
+    const xml=require('fs').readFileSync(0,'utf8');
+    if(!/全屏模式|向下滑动/.test(xml)) process.exit(0);
+    const nodes=[...xml.matchAll(/<node[^>]*>/g)].map(m=>m[0]);
+    for(const n of nodes){
+      const t=((n.match(/text=\"([^\"]*)\"/)||[])[1]||'').trim();
+      const d=((n.match(/content-desc=\"([^\"]*)\"/)||[])[1]||'').trim();
+      if(t==='知道了'||d==='知道了'){
+        const b=n.match(/bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"/);
+        if(b){ console.log(Math.round((parseInt(b[1])+parseInt(b[3]))/2)+' '+Math.round((parseInt(b[2])+parseInt(b[4]))/2)); process.exit(0); }
+      }
+    }
+  " <<<"$xml" 2>/dev/null)"
+  if [[ -n "$xy" ]]; then
+    echo "[tip] 关闭沉浸式全屏提示 tap $xy"
+    adb_run input tap $xy >/dev/null 2>&1 || true
+    sleep 1
+    return 0
+  fi
+  return 1
+}
+
+# CTA 兜底坐标：实测快手下载类广告的「立即下载」蓝色按钮是整块纯色，
+# 文字不渲染成可点击文本（uiautomator 抓不到），只能按位置点。
+# 1080x2400 屏上该按钮区间约 y=2030..2320，中心 (540, 2172)。
+# 之前的兜底是 (540,1500) —— 落在「快手极速版」文字区域，点了个寂寞。
+CTA_FALLBACK="${CTA_FALLBACK:-540 2172}"
+
 click_cta() {
   local xml; xml="$(ui_dump)"
   if [[ -z "$xml" ]]; then
-    echo "[cta] dump 为空（全屏 Canvas/Surface 渲染），坐标兜底"
-    adb_run input tap 540 1500 >/dev/null 2>&1 || true
+    echo "[cta] dump 为空（全屏 Canvas/Surface 渲染），坐标兜底 $CTA_FALLBACK"
+    adb_run input tap $CTA_FALLBACK >/dev/null 2>&1 || true
     sleep 2
     return 0
   fi
@@ -80,11 +115,12 @@ click_cta() {
   # 打印可见文本摘要：定位不到按钮时靠它判断广告到底处于什么状态
   node -e "
     const xml=require('fs').readFileSync(0,'utf8');
-    const re=/<node[^>]*?>/g; const seen=new Set(); let m;
-    while((m=re.exec(xml))){
-      const t=(m[0].match(/text=\"([^\"]+)\"/)||[])[1]||'';
-      const d=(m[0].match(/content-desc=\"([^\"]+)\"/)||[])[1]||'';
-      const s=(t||d).trim(); if(s) seen.add(s);
+    const nodes=[...xml.matchAll(/<node[^>]*>/g)].map(m=>m[0]);
+    const seen=new Set();
+    for(const n of nodes){
+      const t=((n.match(/text=\"([^\"]*)\"/)||[])[1]||'').trim();
+      const d=((n.match(/content-desc=\"([^\"]*)\"/)||[])[1]||'').trim();
+      const s=t||d; if(s) seen.add(s);
     }
     console.log('[cta] 可见文本: '+[...seen].slice(0,40).join(' | ').slice(0,500));
   " <<<"$xml" 2>/dev/null || true
@@ -115,8 +151,8 @@ click_cta() {
     echo "[cta] tap $xy"
     adb_run input tap $xy >/dev/null 2>&1 || true
   else
-    echo "[cta] UI 树未找到按钮文字，坐标兜底 540 1500"
-    adb_run input tap 540 1500 >/dev/null 2>&1 || true
+    echo "[cta] UI 树里没有可点文字（快手的下载按钮是纯色图），坐标兜底 $CTA_FALLBACK"
+    adb_run input tap $CTA_FALLBACK >/dev/null 2>&1 || true
   fi
   sleep 2
 
@@ -315,6 +351,9 @@ screenshot "02-after-login"
 
 # 探测原生广告桥 jsBridge.tobid（前端靠它拿广告位、调 reward）
 echo "[ad] tobid probe: $(cdp tobid-probe | head -c 600)"
+# 广告平台可达性：从 WebView 内部发起（WebView 与原生 SDK 同一个网络栈）。
+# 这里通、Sigmob 却 700000 → 是 SDK 层的设备标识/签名问题，不是网络。
+echo "[ad] ad-network probe: $(cdp fetch-test)"
 
 # 诊断：列出 App 原生桥的全部方法，找广告 SDK 的失败原因查询接口
 echo "[ad] bridge methods: $(cdp bridge-list)"
@@ -339,13 +378,15 @@ for round in $(seq 1 "$MAX_ADS"); do
   bal_before="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).balance||'')}catch{console.log('')}})" 2>/dev/null)"
   echo "[ad] balance before: $bal_before"
 
-  # SDK 全量日志：700000 只是聚合错误，Sigmob 真正的拒绝原因在这里面。
-# 之前 grep 太窄 + tail -30 把关键行截掉了，这里按广告相关 tag 全量抓取。
+  # SDK 全量日志：700000 只是聚合错误，Sigmob 真正的拒绝原因在里面。
+# 关键点：Sigmob 只打了 3 条日志，全是 OAID 相关，说明它的日志级别被关掉了，
+# 光靠 tag 过滤看不到竞价细节 —— 所以这里抓 logcat 全量，靠时间戳和上下文反推。
 dump_ad_log() {
+  adb_quick logcat -d -v time 2>/dev/null > "$out/ad-sdk-full-r${1}.log" 2>/dev/null || true
   adb_quick logcat -d -v time 2>/dev/null \
-    | grep -iE 'sigmob|smad|wxad|\badn\b|no_?bid|no_?fill|700000|onVideoAd|RewardVideo|adload|adLoad|ecpm|tobid|slot|lqm|ksTube|gdt|bugly' \
-    > "$out/ad-sdk-full-r${1}.log" 2>/dev/null || true
-  echo "[ad] logcat -> $out/ad-sdk-full-r${1}.log ($(wc -l < "$out/ad-sdk-full-r${1}.log" 2>/dev/null || echo 0) lines)"
+    | grep -iE 'sigmob|smad|wxad|\badn\b|no_?bid|no_?fill|700000|onVideoAd|RewardVideo|adload|adLoad|ecpm|tobid|slot|ksTube|gdt|bugly|miitmdid|oaid' \
+    > "$out/ad-sdk-filtered-r${1}.log" 2>/dev/null || true
+  echo "[ad] logcat -> $(wc -l < "$out/ad-sdk-full-r${1}.log" 2>/dev/null || echo 0) lines full, $(wc -l < "$out/ad-sdk-filtered-r${1}.log" 2>/dev/null || echo 0) filtered"
 }
 
 # 广告素材填充是概率性的：Sigmob 的 700000 既可能是库存问题，也可能是它把这个
@@ -372,15 +413,26 @@ got=0
     echo "[ad] round $round: $ADS_ATTEMPTS attempts all got no ad fill (${ADS_RETRY_WAIT}s apart)"
     dump_ad_log "$round"
     screenshot "round${round}-noad"
-    if [[ "$round" -lt "$MAX_ADS" ]]; then echo "[ad] cooldown 240s"; sleep 240; fi
+    # 失败后不做长冷却：前端的 250s cooldown 只在 onVideoRewarded 成功时才设置，
+    # 没拿到素材时前端立刻允许再点。只留一个 ADS_RETRY_WAIT 的缓冲。
+    if [[ "$round" -lt "$MAX_ADS" ]]; then
+      echo "[ad] retry in ${ADS_RETRY_WAIT}s (no long cooldown: nothing was credited)"
+      sleep "$ADS_RETRY_WAIT"
+    fi
     continue
   fi
 
   screenshot "round${round}-opened"
 
+  # 系统沉浸式提示会叠在广告顶部，每次拉起都有。先点掉，再做手势进播放。
+  dismiss_immersive_tip || true
+  sleep 2
+  screenshot "round${round}-tip-dismissed"
+
   # 沉浸式广告顶部有「全屏模式，从顶部下滑」入口页，先下滑进入真正播放
   sleep 3
   enter_or_exit_fullscreen
+  dismiss_immersive_tip || true   # 下滑后可能又弹一次
   sleep 8
 
   # 阶段 1：纯等待，不碰任何东西。

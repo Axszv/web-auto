@@ -169,6 +169,26 @@ async function main() {
       })()`);
       break;
     }
+    case 'fetch-test': {
+      // 从 WebView 内部发起请求探测可达性。WebView 和原生广告 SDK 走同一个网络栈，
+      // 所以这里成功但 Sigmob 失败就说明是 SDK 层问题（设备标识/签名），不是网络问题。
+      const urls = args.length ? args : ['https://dc.sigmob.cn/', 'https://tm.sigmob.cn/', 'https://af.52kele.cn/'];
+      out = await evaluate(`(async () => {
+        const urls = ${JSON.stringify(urls)};
+        const results = [];
+        for (const u of urls) {
+          const t0 = Date.now();
+          try {
+            const r = await fetch(u, { mode: 'no-cors', cache: 'no-store' });
+            results.push({ url: u, ok: true, type: r.type, status: r.status, ms: Date.now() - t0 });
+          } catch (e) {
+            results.push({ url: u, ok: false, err: String(e && e.message || e), ms: Date.now() - t0 });
+          }
+        }
+        return results;
+      })()`);
+      break;
+    }
     case 'bridge-list': {
       // 列出 jsBridge 全部方法（找广告 SDK 相关接口）
       out = await evaluate(`(() => {
