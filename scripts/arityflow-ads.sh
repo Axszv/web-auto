@@ -472,11 +472,34 @@ dump_ad_log() {
   echo "[ad] logcat -> $(wc -l < "$out/ad-sdk-full-r${1}.log" 2>/dev/null || echo 0) lines full, $(wc -l < "$out/ad-sdk-filtered-r${1}.log" 2>/dev/null || echo 0) filtered"
 }
 
-# 广告素材填充是概率性的：Sigmob 的 700000 既可能是库存问题，也可能是它把这个
-# 容器环境判成无效设备后静默不返填充。两种都只能靠反复试，所以重试次数给足、
-# 间隔保持 60s（实测 8s 连发会触发限流）。
+# 竞价重试的关键不是「多点几次」，而是「每次都是一次全新的、独立的竞价请求」。
+#
+# 之前是在同一个 App 进程里连点 16 次，但从 Frida 抓到的 Sigmob 请求看，每次都带
+# 同一个 sessionId（App 启动时生成）。也就是 SDK 看到的是「同一 session 内重复请求
+# 同一个激励广告位」，很可能当成无效流量直接丢弃 —— 这正好解释了实测现象：
+# 48 次全灭、18 次全灭、16 次全灭，次数翻倍而成功率一点没变。次数在这里根本不起作用，
+# 48 次只算 1 次。
+#
+# 改成：每次竞价前重启 App 换一个 sessionId，让 SDK 把它当成独立的首次请求。
+restart_app() {
+  adb_run am force-stop "$PKG" >/dev/null 2>&1 || true
+  sleep 3
+  adb_run am start -n "$PKG/$ACT" >/dev/null 2>&1 || true
+  # 等 WebView 起来；force-stop 不清数据，localStorage 里的登录 token 仍在
+  for _ in $(seq 1 20); do
+    adb shell "cat /proc/net/unix" 2>/dev/null | grep -q "webview_devtools_remote" && break
+    sleep 2
+  done
+  sleep 6
+}
+
 got=0
   for attempt in $(seq 1 "$ADS_ATTEMPTS"); do
+    # 除第一次外，每次竞价前重启 App 换一个 sessionId
+    if [[ "$attempt" -gt 1 ]]; then
+      restart_app
+      dismiss_immersive_tip || true
+    fi
     echo "[ad] attempt $attempt/$ADS_ATTEMPTS: $(cdp click-ad)"
     sleep 4
     handle_perm_dialog || true
