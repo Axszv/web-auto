@@ -1,3 +1,0 @@
-attempt=1 running=true boot=
-attempt=2 running=true boot=
-attempt=3 running=true boot=1

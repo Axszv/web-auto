@@ -47,3 +47,8 @@ github_pat*.md
 cron-job.org API 密钥.md
 github_pat_cron.md
 qd.arityflow.top 账号.md
+
+# CI 产物下载目录与运行日志（只在本地分析用，不入库）
+.artChk/
+.artOld/
+.runlog.txt

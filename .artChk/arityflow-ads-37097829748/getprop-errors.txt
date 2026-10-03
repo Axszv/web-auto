@@ -1,2 +1,0 @@
-linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
-WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
