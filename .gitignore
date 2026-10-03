@@ -52,3 +52,6 @@ qd.arityflow.top 账号.md
 .artChk/
 .artOld/
 .runlog.txt
+
+# APK 静态分析临时工作区
+.apkwork/
