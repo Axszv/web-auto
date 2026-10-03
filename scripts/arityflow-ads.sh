@@ -186,12 +186,13 @@ click_cta() {
 }
 
 close_ad() {
+  ad_is_open || return 0        # 广告已不在前台就别乱点，否则会把主界面点花
   for _ in 1 2 3 4 5; do
     handle_perm_dialog && continue
     adb_run input keyevent 4 >/dev/null 2>&1 || true
     sleep 3
     ad_is_open || return 0
-    enter_or_exit_fullscreen          # 顶部下滑退出
+    enter_or_exit_fullscreen          # 顶部下滑退出（这才是这个手势的正确用途）
     ad_is_open || return 0
     adb_run input tap 985 88 >/dev/null 2>&1 || true   # 右上角关闭
     sleep 3
@@ -199,6 +200,32 @@ close_ad() {
   done
   adb_run input keyevent 3 >/dev/null 2>&1 || true
   sleep 3
+}
+
+# 每轮开始前确认 App 还停在首页且「看广告」按钮还在。
+# 上一轮收尾时 close_ad 把界面点坏，第三轮 16 次全是 no-ad-btn，等于白跑一轮。
+ensure_app_ready() {
+  if [[ "$(cdp status)" == *'"hasAdBtn":true'* ]]; then
+    return 0
+  fi
+  echo "[ad] 首页按钮不可用，重启 App 恢复"
+  adb_run am force-stop "$PKG" >/dev/null 2>&1 || true
+  sleep 3
+  adb_run am start -n "$PKG/$ACT" >/dev/null 2>&1 || true
+  sleep 28
+  for _ in $(seq 1 20); do
+    adb shell "cat /proc/net/unix" 2>/dev/null | grep -q "webview_devtools_remote" && break
+    sleep 2
+  done
+  if [[ "$(cdp status)" == *"hasLogin\":true"* ]]; then
+    echo "[ad] 需重新登录: $(cdp login "$ARITY_USER" "$ARITY_PASS")"
+    for _ in $(seq 1 25); do
+      sleep 3
+      [[ "$(cdp status)" != *"hasLogin\":true"* ]] && break
+    done
+  fi
+  dismiss_immersive_tip || true
+  echo "[ad] 恢复后: $(cdp status | head -c 200)"
 }
 
 api_get_quota() {
@@ -375,6 +402,7 @@ echo "[ad] baselines: reward_latest=$REWARD_BASE viewed_today=$VT_BASE account_q
 for round in $(seq 1 "$MAX_ADS"); do
   CURRENT_ROUND="$round"
   echo "[ad] ===== round $round/$MAX_ADS ====="
+  ensure_app_ready
   bal_before="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).balance||'')}catch{console.log('')}})" 2>/dev/null)"
   echo "[ad] balance before: $bal_before"
 
@@ -424,24 +452,23 @@ got=0
 
   screenshot "round${round}-opened"
 
-  # 系统沉浸式提示会叠在广告顶部，每次拉起都有。先点掉，再做手势进播放。
+  # 绝对不要再做「从顶部向下滑动」。
+  # 那个提示的原话是「要退出，请从顶部向下滑动」—— 下滑手势是**退出广告**，
+  # 不是进入播放。之前每轮都执行它，结果广告刚拉起就被自己关掉，前台退回
+  # MainActivity，后面那次 CTA 点击打在后台窗口上，SDK 完全没反应。
+  # 正确做法：只点掉系统提示，然后不动，等广告自己走完。
   dismiss_immersive_tip || true
-  sleep 2
-  screenshot "round${round}-tip-dismissed"
-
-  # 沉浸式广告顶部有「全屏模式，从顶部下滑」入口页，先下滑进入真正播放
   sleep 3
-  enter_or_exit_fullscreen
-  dismiss_immersive_tip || true   # 下滑后可能又弹一次
-  sleep 8
+  screenshot "round${round}-tip-dismissed"
+  echo "[ad] front after tip dismiss: $(resumed_activity | sed 's/.* //')"
 
-  # 阶段 1：纯等待，不碰任何东西。
-  # 关键：onVideoRewarded 由 Sigmob SDK 在视频播完时主动回调。如果此时还在播
-  # 就去点 CTA，会中断播放，SDK 判定未完整观看 → 不发奖。之前固定 40s 后无条件
-  # 点 CTA，很可能就是这样把奖励点没了。
-  echo "[ad] phase1: 纯等待 onVideoRewarded（不点任何东西），最多 90s"
+  # 阶段 1：短暂等待，不碰任何东西。
+  # 纯视频类激励会自然触发 onVideoRewarded，给它 30s；但实测这批广告是
+  # 快手应用下载页，文案明写「完成App下载，即可获得奖励」——它在等点击，不会
+  # 自己发奖。所以这里只做短暂观察就转入 phase2，别干等 90 秒。
+  echo "[ad] phase1: 短暂等待自然回调，最多 30s"
   phase1_ok=0
-  for i in $(seq 1 15); do
+  for i in $(seq 1 5); do
     sleep 6
     vt_probe="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
     rl_probe="$(api_reward_latest | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).data.quota)}catch{console.log('')}})" 2>/dev/null)"
@@ -460,12 +487,37 @@ got=0
   done
   screenshot "round${round}-phase1"
 
-  # 阶段 2：没拿到奖励才去点 endcard 的行动按钮（下载/打开），再等 15s
+  # 阶段 2：没拿到奖励才去点 endcard 的行动按钮（下载/打开），再等 15s。
+  # 点之前必须确认广告 Activity 真的还在前台 —— uiautomator 能抓到后台窗口的
+  # UI 树，点在后台窗口上等于没点。上一轮就是栽在这里：广告早退到后台了，
+  # 日志却照样打出 [cta] tap 540 2188。
   if [[ "$phase1_ok" != "1" ]]; then
-    echo "[ad] phase2: 点击 endcard 行动按钮"
-    click_cta
-    sleep 15
-    screenshot "round${round}-cta-clicked"
+    if ad_is_open; then
+      echo "[ad] phase2: 广告仍在前台，点击行动按钮"
+      click_cta
+      sleep 15
+      screenshot "round${round}-cta-clicked"
+      # 点完可能弹出「是否立即下载」/ 下载器确认，也可能直接跳应用商店
+      for _ in 1 2 3; do
+        ad_is_open || break
+        sleep 3
+      done
+      screenshot "round${round}-after-cta"
+    else
+      echo "[ad] phase2: 广告已不在前台（resumed=$(resumed_activity | sed 's/.* //')），跳过点击"
+      adb_quick uiautomator dump "/sdcard/after.xml" >/dev/null 2>&1 || true
+      adb exec-out cat /sdcard/after.xml 2>/dev/null > "$out/after-r${round}.xml" || true
+      echo "[ad] 残留 UI 文本: $(node -e "
+        const fs=require('fs');
+        try{
+          const x=fs.readFileSync('$out/after-r${round}.xml','utf8');
+          const s=new Set();
+          for(const m of x.matchAll(/text=\"([^\"]+)\"/g)) if(m[1].trim()) s.add(m[1].trim());
+          console.log([...s].slice(0,25).join(' | ').slice(0,400));
+        }catch{ console.log('(无)') }
+      " 2>/dev/null)"
+      screenshot "round${round}-ad-gone"
+    fi
   fi
 
   # 三判据（任一变化 = 奖励已发放）：
