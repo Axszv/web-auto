@@ -11,9 +11,9 @@ mkdir -p "$out"
 
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
-MAX_ADS="${MAX_ADS:-3}"
-ADS_ATTEMPTS="${ADS_ATTEMPTS:-6}"      # 每轮点击「看广告」的次数（Sigmob 只有 1 个广告位，每次点击=一次独立竞价）
-ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-90}" # 两次竞价之间的间隔，太短会被限流
+MAX_ADS="${MAX_ADS:-1}"
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-4}"     # 每轮点击「看广告」的次数（已知 CI 环境拿不到素材，见 docs/arityflow-ads.md）
+ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-90}" # 两次竞价之间的间隔
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
 
 # 指定唯一设备（ARM runner 上可能有多设备/残留）

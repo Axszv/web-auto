@@ -189,6 +189,43 @@ async function main() {
       })()`);
       break;
     }
+    case 'ad-watch': {
+      // 自己接管广告事件流：覆盖 setListener，并把 reward 的回调包一层。
+      // 这样能拿到 onVideoAdLoadSuccess / onVideoAdPlayStart / onVideoRewarded
+      // 等完整生命周期，而不是只在前端 console 里看到 onVideoAdLoadError。
+      // 注意这会顶掉前端自己的监听器，所以仅用于诊断，不改页面状态。
+      out = await evaluate(`(() => {
+        const T = window.jsBridge && window.jsBridge.tobid;
+        if (!T) return { error: 'no jsBridge.tobid' };
+        window.__adTrace = [];
+        const slot = '7368352132657660';
+        T.setListener(function(evt, data) {
+          window.__adTrace.push({ at: Date.now(), evt: evt, data: data === undefined ? null : data });
+        });
+        const origReward = T.reward.bind(T);
+        T.reward = function(params, cb) {
+          window.__adTrace.push({ at: Date.now(), call: 'reward', params: params });
+          return origReward(params, function(ok, err) {
+            window.__adTrace.push({ at: Date.now(), rewardCb: { ok: ok, err: err === undefined ? null : String(err) } });
+          });
+        };
+        try {
+          T.requestPermissionIfNecessary();
+        } catch (e) {}
+        T.reward({ adId: slot, userId: String((JSON.parse(localStorage.getItem('user') || '{}') || {}).id || '') });
+        return { armed: true, slot: slot };
+      })()`);
+      break;
+    }
+    case 'ad-trace': {
+      out = await evaluate(`(() => (window.__adTrace || []).map(e => ({
+        at: e.at,
+        secs: Math.round((e.at - (window.__adTrace[0] && window.__adTrace[0].at)) / 100) / 10,
+        evt: e.evt || (e.call ? 'CALL ' + e.call : 'REWARD_CB'),
+        data: e.data || e.params || e.rewardCb || null
+      })))()`);
+      break;
+    }
     case 'bridge-list': {
       // 列出 jsBridge 全部方法（找广告 SDK 相关接口）
       out = await evaluate(`(() => {

@@ -55,3 +55,6 @@ qd.arityflow.top 账号.md
 
 # APK 静态分析临时工作区
 .apkwork/
+
+# Frida 临时工作区（诊断用，已在 docs/arityflow-ads.md 记录结论）
+.frida-tmp/
