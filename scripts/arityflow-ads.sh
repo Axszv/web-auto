@@ -361,6 +361,16 @@ echo "[ad] app pid: $pid"
 # 容器内网络连通性诊断（Redroid 能否访问后端 API 和广告平台）
 echo "[ad] net check:"
 {
+  # 出口 IP：这是判断「广告为什么不出货」的关键维度。
+  # 实测真机换美国 IP 就「当前无广告」，换国内 IP 就正常；而 CI 用美国 IP
+  # 偶尔也能出货（10-02 三次），说明 IP 是概率因素不是一票否决。
+  # GitHub runner 每次分配到的 IP 都不同，所以多个短 run = 多次 IP 采样，
+  # 比单个长 run 反复用同一个 IP 更有效。这个值就是用来验证该假设的。
+  echo "--- 出口 IP"
+  echo "runner_ip: $(node -e "
+    const urls=['https://api.ipify.org','https://ifconfig.me/ip','https://icanhazip.com'];
+    (async()=>{ for(const u of urls){ try{ const r=await fetch(u); const t=(await r.text()).trim(); if(t) { console.log(t); return; } }catch(e){} } console.log('(unknown)'); })();
+  " 2>/dev/null)"
   echo "--- ping 8.8.8.8"
   adb_quick ping -c 1 -W 3 8.8.8.8 2>&1 | tail -3
   echo "--- DNS 解析 sigmob（广告平台，字节系）"

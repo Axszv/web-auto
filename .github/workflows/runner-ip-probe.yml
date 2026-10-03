@@ -1,0 +1,42 @@
+name: Runner IP probe
+# 诊断用：验证 GitHub runner 每次分配到的出口 IP 是否随机。
+# 背景：真机换美国 IP 就「当前无广告」、换国内 IP 就正常，而 CI 用美国 IP 偶尔
+# 也能出货（10-02 三次）。如果 runner IP 每次不同，那「多跑几个短 run」就等于
+# 「多次 IP 采样」，命中率应该显著高于在一个 run 里反复竞价。
+on:
+  workflow_dispatch:
+    inputs:
+      samples:
+        description: How many runner IPs to sample
+        required: false
+        default: '6'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    # ARM64 原生 runner（免费额度按 ARM 分钟算，但这里每个 job 只跑几秒）
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        idx: [1, 2, 3, 4, 5, 6]
+    steps:
+      - name: Sample egress IP
+        run: |
+          ip="$(curl -s --max-time 10 https://api.ipify.org || echo FAIL)"
+          geo="$(curl -s --max-time 10 'https://ipinfo.io/json' || echo '{}')"
+          cc="$(echo "$geo" | jq -r '.country // "?"' 2>/dev/null || echo '?')"
+          org="$(echo "$geo" | jq -r '.org // "?"' 2>/dev/null || echo '?')"
+          echo "sample ${{ matrix.idx }}: ip=$ip country=$cc org=$org" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect
+        if: always()
+        run: |
+          {
+            echo "=== runner IP 采样（${{ github.run_attempt }} 次触发）==="
+            echo "结论见上面的 step summary；若 IP 互不相同，说明「多开短 run」= 多次 IP 采样。"
+          } >> "$GITHUB_STEP_SUMMARY"
