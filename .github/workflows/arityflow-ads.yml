@@ -2,14 +2,9 @@ name: ArityFlow Daily Ads (Redroid ARM64)
 
 on:
   schedule:
-    # 每天一次，刻意压到最低。
-    # 根因已用 Frida 定位清楚：Sigmob 服务端竞价是成功的（多个 ADN event_type:"ready"，
-    # 最高 ecpm 9000），但客户端去各 ADN 拉素材时 GDT 反复返回 102006
-    #「没有找到符合条件的广告」，最终 callLoadFail → 前端收到 700000。
-    # 即模拟器/容器在广告平台的设备识别这一关过不去，可改的变量（IP、root、
-    # 属性伪装、OAID）已逐个实测排除。详见 docs/arityflow-ads.md
-    # 所以这里只保留一次低频尝试，权当碰运气，不要预期产出。
-    - cron: '37 3 * * *'   # UTC 03:37 = 北京 11:37
+    # UTC 01:17 = 北京 09:17。
+    # 广告额度 +24.7/次、每天 3 次，需真实播放（Redroid ARM64 + 伪装真机才有素材）
+    - cron: '17 1 * * *'
   workflow_dispatch:
     inputs:
       max_ads:
@@ -25,7 +20,7 @@ on:
       ads_retry_wait:
         description: Seconds between bids (too short triggers rate limiting)
         required: false
-        default: '90'
+        default: '60'
         type: string
 
 permissions:
@@ -74,61 +69,6 @@ jobs:
           sudo apt-get install -y adb jq curl
           uname -a | tee diagnostics/host.txt
 
-      # 可选的本地代理（sing-box）。当前 SINGBOX_CONFIG 里的节点出口在美国，
-      # 而实测真机走美国 IP 就是「当前无广告」、走国内 IP 才出货 —— 所以要让
-      # CI 真正出货，得把出口换成境内节点。这一步只是把代理跑起来，
-      # 换节点只需更新 SINGBOX_CONFIG secret，不用改任何流程。
-      # 用 step output 而不是 workflow 级 env 来判断，避免 secret 对所有 action 可见。
-      - name: Check proxy availability
-        id: proxycheck
-        env:
-          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
-        shell: bash
-        run: |
-          if [[ -n "$SINGBOX_CONFIG" ]]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "proxy config found"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "no proxy config — container will use runner IP directly"
-          fi
-
-      - name: Start sing-box proxy
-        if: steps.proxycheck.outputs.enabled == 'true'
-        env:
-          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # 注入访问日志。默认配置不打日志的话，容器流量到底有没有经过代理
-          # 完全看不出来 —— 这正是要验证的事，所以必须开。
-          echo "$SINGBOX_CONFIG" | node -e "
-            const fs = require('fs');
-            let cfg = JSON.parse(fs.readFileSync(0, 'utf8'));
-            cfg.log = Object.assign({}, cfg.log, { level: 'info', timestamp: true });
-            fs.writeFileSync('singbox.json', JSON.stringify(cfg, null, 2));
-          "
-          SINGBOX_VER="1.13.16"
-          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz" -o /tmp/sing-box.tar.gz
-          tar -xzf /tmp/sing-box.tar.gz -C /tmp
-          /tmp/sing-box/sing-box run -c singbox.json > /tmp/sing-box.log 2>&1 &
-          echo $! > /tmp/singbox.pid
-          sleep 5
-
-          # 端口是否在监听
-          if ! kill -0 "$(cat /tmp/singbox.pid)" 2>/dev/null; then
-            echo "sing-box 进程已退出，日志："; cat /tmp/sing-box.log; exit 1
-          fi
-          echo "sing-box alive, inbound: $(node -e "
-            const c=JSON.parse(require('fs').readFileSync('singbox.json','utf8'));
-            console.log((c.inbounds||[]).map(i=>i.type+':'+i.listen+':'+i.listen_port).join(','));
-          ")"
-
-          # 出口 IP：ipify 有时走不通，用自有后端再测一次
-          echo "proxy egress ipify : $(curl -s --max-time 20 --proxy http://127.0.0.1:1080 https://api.ipify.org || echo FAIL)"
-          echo "proxy egress backend: $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --proxy http://127.0.0.1:1080 https://af.52kele.cn/api/status || echo FAIL)"
-          echo "direct egress ipify: $(curl -s --max-time 20 https://api.ipify.org || echo FAIL)"
-
       - name: Enable Android Binder devices
         shell: bash
         run: |
@@ -174,29 +114,6 @@ jobs:
           bash scripts/probe-oaid.sh diagnostics
           exit 0
 
-      # 让容器内的 App 走宿主机的 sing-box。
-      # Android 里的 App 只认系统级 HTTP 代理（settings global http_proxy），
-      # 而容器里的 127.0.0.1 指向容器自己，所以要用 adb reverse 把容器的 1080
-      # 反向隧道到宿主机的 1080。Redroid 是 --privileged，这条能生效。
-      - name: Route container traffic through proxy
-        if: steps.proxycheck.outputs.enabled == 'true'
-        env:
-          SINGBOX_CONFIG: ${{ secrets.SINGBOX_CONFIG }}
-        shell: bash
-        run: |
-          set +e
-          export ANDROID_SERIAL=127.0.0.1:5555
-          adb reverse tcp:1080 tcp:1080
-          adb shell settings put global http_proxy 127.0.0.1:1080
-          echo "container proxy: $(adb shell settings get global http_proxy | tr -d '\r')"
-          echo "runner-ip (直连出口): $(curl -s --max-time 10 https://api.ipify.org)"
-          # Redroid 里没有 curl，所以不能在容器内直接查出口 IP。
-          # 改用 sing-box 的访问日志验证：下面广告阶段跑完后，
-          # 日志里若出现来自容器网段的连接，就说明 adb reverse + 系统代理生效了。
-          echo "--- 容器内 curl 不存在，出口 IP 改由 sing-box 访问日志验证 ---"
-          adb shell 'which curl || echo "(Redroid 无 curl，符合预期)"'
-          exit 0
-
       - name: Watch daily rewarded ads
         env:
           ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
@@ -204,7 +121,7 @@ jobs:
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
           MAX_ADS: ${{ inputs.max_ads || '3' }}
           ADS_ATTEMPTS: ${{ inputs.ads_attempts || '16' }}
-          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '90' }}
+          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '60' }}
         shell: bash
         run: |
           if [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then
@@ -230,8 +147,3 @@ jobs:
           path: diagnostics/
           if-no-files-found: warn
           retention-days: 7
-
-      - name: Stop proxy
-        if: always() && steps.proxycheck.outputs.enabled == 'true'
-        shell: bash
-        run: kill $(cat /tmp/singbox.pid) 2>/dev/null || true
