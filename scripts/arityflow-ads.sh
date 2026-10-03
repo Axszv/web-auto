@@ -165,7 +165,7 @@ click_cta() {
       const xml=require('fs').readFileSync(0,'utf8');
       const nodes=[...xml.matchAll(/<node[^>]*>/g)].map(m=>m[0]);
       const kw=['确定','确认','允许','继续','是','好的','知道了'];
-      const skip=['取消','否','关闭','以后'];
+      const skip=['取消','否','关闭','以后','设置','未知来源'];
       for(const n of nodes){
         const t=((n.match(/text=\"([^\"]*)\"/)||[])[1]||'').trim();
         const d=((n.match(/content-desc=\"([^\"]*)\"/)||[])[1]||'').trim();
