@@ -153,6 +153,22 @@ async function main() {
       })()`);
       break;
     }
+    case 'user-info': {
+      // 权威判据来源：前端登录后把用户信息（含额度 quota）存在 localStorage。
+      // adcap/quota 的 viewed_today 依赖 OAID 匹配，OAID 变了就永远查不到，
+      // 账户余额则一定是同一个账号的。
+      out = await evaluate(`(() => {
+        const ls = window.localStorage;
+        const keys = [];
+        for (let i = 0; i < ls.length; i++) keys.push(ls.key(i));
+        const raw = {};
+        for (const k of keys) { try { raw[k] = ls.getItem(k); } catch (e) {} }
+        let user = raw.user || null;
+        try { user = JSON.parse(user); } catch {}
+        return { keys, user, token: (raw.token || raw.access_token || '').slice(0, 16) };
+      })()`);
+      break;
+    }
     case 'bridge-list': {
       // 列出 jsBridge 全部方法（找广告 SDK 相关接口）
       out = await evaluate(`(() => {

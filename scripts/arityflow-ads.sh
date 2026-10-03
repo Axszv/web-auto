@@ -61,36 +61,89 @@ enter_or_exit_fullscreen() {
 
 # 激励视频结算需要点 endcard 的行动按钮（快手「立即下载」/抖音「下载」/微信小程序等），
 # 点后等 15 秒才 onVideoRewarded 结算。广告是原生 Activity，uiautomator 能抓到按钮文字。
+# 注意：Android 上按钮常常只有 content-desc 没有 text，两个都要匹配。
+ui_dump() { adb_quick uiautomator dump "/sdcard/ui.xml" >/dev/null 2>&1 || true
+            adb exec-out cat /sdcard/ui.xml 2>/dev/null; }
+
 click_cta() {
-  adb_quick uiautomator dump "/sdcard/cta.xml" >/dev/null 2>&1 || true
-  local xml; xml="$(adb exec-out cat /sdcard/cta.xml 2>/dev/null)"
+  local xml; xml="$(ui_dump)"
   if [[ -z "$xml" ]]; then
-    echo "[cta] dump 为空（可能全屏 Canvas 渲染），用坐标兜底"
-    adb_run input tap 540 1500 >/dev/null 2>&1 || true   # endcard 中下方按钮典型位置
+    echo "[cta] dump 为空（全屏 Canvas/Surface 渲染），坐标兜底"
+    adb_run input tap 540 1500 >/dev/null 2>&1 || true
     sleep 2
     return 0
   fi
-  # 找可点的下载/安装类按钮（含 立即下载/下载/安装/打开/继续/查看）
+  echo "$xml" > "$out/cta-r${CURRENT_ROUND}-endcard.xml"
+
+  # 打印可见文本摘要：定位不到按钮时靠它判断广告到底处于什么状态
+  node -e "
+    const xml=require('fs').readFileSync(0,'utf8');
+    const re=/<node[^>]*?>/g; const seen=new Set(); let m;
+    while((m=re.exec(xml))){
+      const t=(m[0].match(/text=\"([^\"]+)\"/)||[])[1]||'';
+      const d=(m[0].match(/content-desc=\"([^\"]+)\"/)||[])[1]||'';
+      const s=(t||d).trim(); if(s) seen.add(s);
+    }
+    console.log('[cta] 可见文本: '+[...seen].slice(0,40).join(' | ').slice(0,500));
+  " <<<"$xml" 2>/dev/null || true
+
+  # 找行动按钮：优先下载/安装类，其次打开/继续/领取
   local xy
   xy="$(node -e "
     const xml=require('fs').readFileSync(0,'utf8');
-    const re=/<node[^>]*text=\"([^\"]*)\"[^>]*bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"[^>]*\/>/g;
-    let m, hit=null;
-    const kw=/下载|安装|打开|继续|查看|领取/;
-    while((m=re.exec(xml))){
-      const t=m[1];
-      if(kw.test(t)){ hit=[(parseInt(m[2])+parseInt(m[4]))/2,(parseInt(m[3])+parseInt(m[5]))/2]; break; }
-    }
+    const nodes=[...xml.matchAll(/<node[^>]*>/g)].map(m=>m[0]);
+    const pick=(kw,skip)=>{
+      for(const n of nodes){
+        const t=((n.match(/text=\"([^\"]*)\"/)||[])[1]||'').trim();
+        const d=((n.match(/content-desc=\"([^\"]*)\"/)||[])[1]||'').trim();
+        const lbl=t||d;
+        if(!lbl) continue;
+        if(kw.some(k=>lbl.includes(k)) && !skip.some(k=>lbl.includes(k))){
+          const b=n.match(/bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"/);
+          if(b) return [ (parseInt(b[1])+parseInt(b[3]))/2, (parseInt(b[2])+parseInt(b[4]))/2 ];
+        }
+      }
+      return null;
+    };
+    const hit = pick(['立即下载','下载','安装','打开','继续','领取','查看广告','查看'], ['关闭','跳过','以后再说','不再','取消'])
+             || pick(['广告'], []);
     if(hit) console.log(Math.round(hit[0])+' '+Math.round(hit[1]));
   " <<<"$xml" 2>/dev/null)"
   if [[ -n "$xy" ]]; then
     echo "[cta] tap $xy"
     adb_run input tap $xy >/dev/null 2>&1 || true
   else
-    echo "[cta] 未在 UI 树找到按钮文字，用坐标兜底"
+    echo "[cta] UI 树未找到按钮文字，坐标兜底 540 1500"
     adb_run input tap 540 1500 >/dev/null 2>&1 || true
   fi
   sleep 2
+
+  # 部分广告点完会弹二次确认（「是否立即下载」/「打开应用商店」）或跳转应用商店，
+  # 那样同样拿不到结算，必须把确认框点掉。
+  local xml2; xml2="$(ui_dump)"
+  if [[ -n "$xml2" ]]; then
+    local xy2
+    xy2="$(node -e "
+      const xml=require('fs').readFileSync(0,'utf8');
+      const nodes=[...xml.matchAll(/<node[^>]*>/g)].map(m=>m[0]);
+      const kw=['确定','确认','允许','继续','是','好的','知道了'];
+      const skip=['取消','否','关闭','以后'];
+      for(const n of nodes){
+        const t=((n.match(/text=\"([^\"]*)\"/)||[])[1]||'').trim();
+        const d=((n.match(/content-desc=\"([^\"]*)\"/)||[])[1]||'').trim();
+        const lbl=t||d; if(!lbl) continue;
+        if(kw.some(k=>lbl===k||lbl.includes(k)) && !skip.some(k=>lbl.includes(k))){
+          const b=n.match(/bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"/);
+          if(b){ console.log(Math.round((parseInt(b[1])+parseInt(b[3]))/2)+' '+Math.round((parseInt(b[2])+parseInt(b[4]))/2)); process.exit(0); }
+        }
+      }
+    " <<<"$xml2" 2>/dev/null)"
+    if [[ -n "$xy2" ]]; then
+      echo "[cta] 二次确认 tap $xy2"
+      adb_run input tap $xy2 >/dev/null 2>&1 || true
+      sleep 2
+    fi
+  fi
   return 0
 }
 
@@ -119,6 +172,62 @@ api_get_quota() {
       body: JSON.stringify({ oaid: '$OAID' })
     }).then(r => r.text()).then(t => console.log(t)).catch(e => console.log('ERR:' + e.message));
   " 2>/dev/null
+}
+
+# App 内账户额度（localStorage 里的 user.quota）。这是与账号绑定的权威判据：
+# adcap/quota 依赖 OAID 匹配，OAID 一旦取不到真值（容器里常退回 InstallId），
+# viewed_today 就恒为 0，看起来像"没结算"，其实是查错了账号维度。
+account_quota() {
+  local q; q="$(api_account_quota)"
+  [[ -z "$q" ]] && q="$(cdp user-info | node -e "
+    let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+      try{
+        const j=JSON.parse(d.trim());
+        const u=j.user||{};
+        console.log(String(u.quota ?? u.balance ?? u.amount ?? ''));
+      }catch{ console.log(''); }
+    })
+  " 2>/dev/null)"
+  printf '%s' "$q"
+}
+
+# 账户余额直连后端：af.52kele.cn 是标准 new-api 站（/api/user/login + /api/user/self），
+# 登录一次就能读到账号真实 quota。这样判据完全不依赖 WebView/CDP ——
+# 即使广告浮层把 WebView 挡住、或 CDP 断了，奖励是否到账依然可判定。
+api_account_quota() {
+  node -e "
+    (async () => {
+      const r = await fetch('https://af.52kele.cn/api/user/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: process.argv[1], password: process.argv[2] })
+      });
+      const j = JSON.parse(await r.text());
+      const t = j.data.access_token, uid = String(j.data.user.id);
+      const s = await fetch('https://af.52kele.cn/api/user/self', {
+        headers: { 'Authorization': 'Bearer ' + t, 'New-Api-User': uid }
+      });
+      console.log((JSON.parse(await s.text()).data).quota);
+    })().catch(() => console.log(''));
+  " "$ARITY_USER" "$ARITY_PASS" 2>/dev/null
+}
+
+# 广告奖励的「到账凭证」。前端在 onVideoRewarded 后就是拉这个接口并提示
+# 「🎉 +x 已到账」—— 它比 viewed_today 更权威：viewed_today 只是次数，
+# 这个才是广告平台回调服务端真正发放的那笔额度（单位与账户 quota 相同）。
+api_reward_latest() {
+  node -e "
+    fetch('https://callback.af-freeapi.top/api/reward/latest?userId=$ADS_UID', {
+      headers: { 'Accept': 'application/json' }
+    }).then(r => r.text()).then(t => console.log(t)).catch(e => console.log('ERR:' + e.message));
+  " 2>/dev/null
+}
+
+# 额度数值化（new-api 的 quota 是 ×500000 的整数），返回可比较的浮点
+quota_num() {
+  node -e "
+    const v=parseFloat(process.argv[1]);
+    console.log(isFinite(v)? String(v/500000) : '');
+  " "$1" 2>/dev/null
 }
 
 # WebView 页面 uiautomator dump 抓不到内部文字，改用 CDP 直连 WebView DOM 操作。
@@ -173,6 +282,19 @@ if [[ "$(cdp status)" == *"hasLogin\":true"* ]]; then
   echo "[ad] login errors: $(wc -l < "$out/login-err.log" 2>/dev/null || echo 0)"
 fi
 echo "[ad] status: $(cdp status)"
+# 记录广告发奖回调服务用的 userId（= 账户 id，reward/latest 按它取）
+ADS_UID="$(cdp user-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const u=JSON.parse(d.trim()).user||{};console.log(u.id||'')}catch{console.log('')}})" 2>/dev/null)"
+if [[ -z "$ADS_UID" ]]; then
+  ADS_UID="$(node -e "
+    (async () => {
+      const r = await fetch('https://af.52kele.cn/api/user/login', { method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({username:process.argv[1],password:process.argv[2]}) });
+      console.log(String(JSON.parse(await r.text()).data.user.id));
+    })().catch(()=>console.log(''));
+  " "$ARITY_USER" "$ARITY_PASS" 2>/dev/null)"
+fi
+echo "[ad] ads reward uid: $ADS_UID  (reward/latest: $(api_reward_latest))"
 screenshot "02-after-login"
 
 # 探测原生广告桥 jsBridge.tobid（前端靠它拿广告位、调 reward）
@@ -190,7 +312,13 @@ DEVICE_OAID="$(echo "$OAID_JSON" | node -e "let d='';process.stdin.on('data',c=>
 
 
 watched=0
+# 每轮的对比基线：本轮开始前的到账凭证与观看计数
+REWARD_BASE="$(api_reward_latest | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).data.quota)}catch{console.log('')}})" 2>/dev/null)"
+VT_BASE="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
+echo "[ad] baselines: reward_latest=$REWARD_BASE viewed_today=$VT_BASE account_quota=$(quota_num "$(account_quota)")"
+
 for round in $(seq 1 "$MAX_ADS"); do
+  CURRENT_ROUND="$round"
   echo "[ad] ===== round $round/$MAX_ADS ====="
   bal_before="$(cdp home-ad-info | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).balance||'')}catch{console.log('')}})" 2>/dev/null)"
   echo "[ad] balance before: $bal_before"
@@ -231,24 +359,58 @@ for round in $(seq 1 "$MAX_ADS"); do
   enter_or_exit_fullscreen
   sleep 8
 
-  # 激励视频约 30-60s，等它播完进入 endcard
-  echo "[ad] waiting for video to finish (~40s)"
-  sleep 40
-  screenshot "round${round}-endcard"
+  # 阶段 1：纯等待，不碰任何东西。
+  # 关键：onVideoRewarded 由 Sigmob SDK 在视频播完时主动回调。如果此时还在播
+  # 就去点 CTA，会中断播放，SDK 判定未完整观看 → 不发奖。之前固定 40s 后无条件
+  # 点 CTA，很可能就是这样把奖励点没了。
+  echo "[ad] phase1: 纯等待 onVideoRewarded（不点任何东西），最多 90s"
+  phase1_ok=0
+  for i in $(seq 1 15); do
+    sleep 6
+    vt_probe="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
+    rl_probe="$(api_reward_latest | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).data.quota)}catch{console.log('')}})" 2>/dev/null)"
+    echo "[ad] phase1 t+$((i*6))s viewed_today=$vt_probe reward_latest=$rl_probe resumed=$(resumed_activity | sed 's/.* //')"
+    if [[ -n "$REWARD_BASE" && -n "$rl_probe" && "$rl_probe" != "$REWARD_BASE" ]]; then
+      echo "[ad] phase1 rewarded: reward_latest $REWARD_BASE -> $rl_probe"
+      phase1_ok=1
+      break
+    fi
+    # 广告自然放完会退回 WebView，且 onVideoRewarded 已让 viewed_today 递增
+    if ! ad_is_open && [[ -n "$VT_BASE" && -n "$vt_probe" && "$vt_probe" -gt "$VT_BASE" ]]; then
+      echo "[ad] phase1: 广告已关闭且计数递增 ($VT_BASE -> $vt_probe)"
+      phase1_ok=1
+      break
+    fi
+  done
+  screenshot "round${round}-phase1"
 
-  # 结算关键：点 endcard 的「立即下载/打开」按钮，再等 15 秒 onVideoRewarded 才发奖
-  echo "[ad] click CTA to settle reward"
-  click_cta
-  sleep 15
+  # 阶段 2：没拿到奖励才去点 endcard 的行动按钮（下载/打开），再等 15s
+  if [[ "$phase1_ok" != "1" ]]; then
+    echo "[ad] phase2: 点击 endcard 行动按钮"
+    click_cta
+    sleep 15
+    screenshot "round${round}-cta-clicked"
+  fi
 
-  # 权威判据：后端 viewed_today 递增 = 奖励已发放（走 runner 侧 Node，不受 WebView 遮挡影响）
-  vt_before="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
-  vt_after="$vt_before"
-  rewarded=0
-  for i in $(seq 1 10); do
+  # 三判据（任一变化 = 奖励已发放）：
+  #   account_quota —— 账户余额，最权威（服务端加的）
+  #   reward/latest —— 广告发奖回调服务的到账凭证（前端靠它提示「🎉 +x 已到账」）
+  #   viewed_today   —— 次数计数，仅作参考
+  aq_before="$(account_quota)"
+  aq_before_num="$(quota_num "$aq_before")"
+  aq_after_num="$aq_before_num"
+  vt_after="$VT_BASE"; rl_after="$REWARD_BASE"
+  rewarded="$phase1_ok"
+  for i in $(seq 1 25); do
+    aq_after_num="$(quota_num "$(account_quota)")"
+    rl_after="$(api_reward_latest | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).data.quota)}catch{console.log('')}})" 2>/dev/null)"
     vt_after="$(api_get_quota | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d.trim()).viewed_today)}catch{console.log('')}})" 2>/dev/null)"
-    if [[ -n "$vt_before" && -n "$vt_after" && "$vt_after" -gt "$vt_before" ]]; then
-      echo "[ad] rewarded! viewed_today $vt_before -> $vt_after"
+    aq_up=0; rl_up=0; vt_up=0
+    [[ -n "$aq_before_num" && -n "$aq_after_num" ]] && awk -v a="$aq_after_num" -v b="$aq_before_num" 'BEGIN{exit !(a>b)}' && aq_up=1
+    [[ -n "$REWARD_BASE" && -n "$rl_after" && "$rl_after" != "$REWARD_BASE" ]] && rl_up=1
+    [[ -n "$VT_BASE" && -n "$vt_after" && "$vt_after" -gt "$VT_BASE" ]] && vt_up=1
+    if [[ "$aq_up" == "1" || "$rl_up" == "1" ]]; then
+      echo "[ad] rewarded! account_quota $aq_before_num -> $aq_after_num ; reward_latest $REWARD_BASE -> $rl_after (aq_up=$aq_up rl_up=$rl_up vt_up=$vt_up)"
       rewarded=1
       break
     fi
@@ -260,10 +422,11 @@ for round in $(seq 1 "$MAX_ADS"); do
   sleep 8
   if [[ "$rewarded" == "1" ]]; then
     watched=$((watched+1))
-    echo "[ad] round $round SUCCESS, ad status: $(api_get_quota)"
+    echo "[ad] round $round SUCCESS"
   else
-    echo "[ad] round $round: ad played but no reward credited"
+    echo "[ad] round $round: 广告播了但没发奖 (reward_latest 仍=$rl_after, viewed_today $VT_BASE -> $vt_after)"
   fi
+  REWARD_BASE="$rl_after"; VT_BASE="$vt_after"
 
   if [[ "$round" -lt "$MAX_ADS" ]]; then
     echo "[ad] cooldown 240s"
