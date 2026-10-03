@@ -19,7 +19,7 @@ on:
       ads_attempts:
         description: Clicks on 「看广告」 per round (Sigmob has only 1 slot, each click = one bid)
         required: false
-        default: '6'
+        default: '4'
         type: string
       ads_retry_wait:
         description: Seconds between bids (too short triggers rate limiting)
@@ -124,8 +124,8 @@ jobs:
           ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
           MAX_ADS: ${{ inputs.max_ads || '3' }}
-          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '6' }}
-          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '60' }}
+          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '4' }}
+          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '20' }}
         shell: bash
         run: |
           if [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then

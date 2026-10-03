@@ -12,8 +12,10 @@ mkdir -p "$out"
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
 MAX_ADS="${MAX_ADS:-3}"
-ADS_ATTEMPTS="${ADS_ATTEMPTS:-6}"     # 每轮竞价次数。实测有货时 attempt 1 即命中（4 分钟完成），没货时堆次数只是烧时间；改用一天多时段覆盖代替单轮高频
-ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-60}" # 两次竞价间隔；8s 连发会被限流，20s 能出货，成功那版用的就是这个量级
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-4}"     # 每轮竞价次数。单次判定要等 150s（实测 Sigmob 最慢 104 秒），4 次刚好一轮约 12 分钟；
+                                      # 一天 4 时段共 16 次竞价铺满，总时长可控
+ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-20}"   # 两次竞价间隔。判定失败后不必再等 60s —— 现在单次等待已经放宽到 150s，那才是真正需要的时间
+ADS_OPEN_WAIT_TRIES="${ADS_OPEN_WAIT_TRIES:-30}"  # 等广告浮层的轮询次数（×5秒=150s）。实测 Sigmob 服务端最慢要 104 秒才返回
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
 
 # 指定唯一设备（ARM runner 上可能有多设备/残留）
@@ -503,13 +505,20 @@ got=0
     echo "[ad] attempt $attempt/$ADS_ATTEMPTS: $(cdp click-ad)"
     sleep 4
     handle_perm_dialog || true
-    # 轮询等待广告浮层出现（最多 25 秒）
+    # 轮询等待广告浮层出现。
+    #
+    # 判定超时从 25 秒放宽到 150 秒，依据是实测的 Sigmob 服务端响应耗时差异：
+    # 成功那次 dc.sigmob.cn 833ms 就返回，失败那次要 104764ms（104 秒）。
+    # 原来的 25 秒窗口内，服务端对慢请求的流量根本还没处理完，脚本已经判失败
+    # 并点了下一次 —— 于是看起来「48 次全灭」，其实绝大多数是根本没等到结果。
+    # 这也是为什么竞价次数翻倍毫无作用：每一次都在半路上被提前掐断。
     opened=0
-    for i in $(seq 1 12); do
-      sleep 2
+    for i in $(seq 1 "$ADS_OPEN_WAIT_TRIES"); do
+      sleep 5
       handle_perm_dialog && continue
       if ad_is_open; then opened=1; break; fi
     done
+    echo "[ad] attempt $attempt 等待 $((ADS_OPEN_WAIT_TRIES * 5))s 后 opened=$opened"
     if [[ "$opened" == "1" ]]; then got=1; break; fi
     adb_run input keyevent 4 >/dev/null 2>&1 || true
     sleep "$ADS_RETRY_WAIT"
