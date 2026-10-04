@@ -19,7 +19,7 @@ OUT="${2:-diagnostics}"
 # 转绝对路径：attach 阶段的工作目录未必是仓库根，相对路径会写到不存在的位置
 mkdir -p "$OUT" 2>/dev/null
 OUT="$(cd "$OUT" 2>/dev/null && pwd || echo "$OUT")"
-FRIDA_VER="${FRIDA_VER:-17.22.0}"
+FRIDA_VER="${FRIDA_VER:-14.2.18}"
 PKG="com.klkjapp.www"
 SERIAL=127.0.0.1:5555
 export ANDROID_SERIAL="$SERIAL"
@@ -116,15 +116,15 @@ fi
 echo "[frida] attach pid=$pid"
 # frida-inject 在 Frida 17 是 Go 重写版，参数体系跟老的 Python 版不同
 # （-U 已不存在）。先把它的可用参数打出来，避免再猜。
-echo "[frida] frida-inject --help:"
-./frida-inject --help 2>&1 | sed 's/^/[inject-help] /' | head -20
-# 正确写法是 -D/--device（Go 版 frida-inject 的参数体系，-U 和 -H 都不存在，
-# 由上面那次 --help 自省确认）。socket 表示走adb/USB 通道直连设备上的 server；
-# 也可用 -D 127.0.0.1:27042 指定前面 forward 出来的地址。
-# -R v8 是必需的：Frida 17 的 frida-inject 默认跑 qjs(QuickJS)，而我们打包进
-# agent 的 frida-java-bridge 需要 V8 才能用。跑 qjs 会在加载瞬间
-# "Connection closed" —— attach 成功但脚本加载即崩。
-nohup ./frida-inject -D socket -R v8 -p "$pid" -s agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
+# Frida 14 的 frida-inject 仍是 Python 版：设备用 -U（USB/adb 通道），
+# 脚本文件用 -l 而不是 -s（-s 是 Frida 15+ Go 版的参数）。
+# Frida 14 的 frida-inject 是 Python 脚本，需要宿主有 python3 和匹配版本的
+# frida 模块。runner 上自带 python3；版本必须与 frida-server 一致，否则连不上。
+if ! python3 -c "import frida" 2>/dev/null; then
+  echo "[frida] 安装 python frida ${FRIDA_VER}"
+  python3 -m pip install --quiet --disable-pip-version-check "frida==${FRIDA_VER}" > pip.log 2>&1
+fi
+nohup python3 ./frida-inject -U -p "$pid" -l agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
 sleep 15
 echo "[frida] hook 输出（agent 原始日志）："
 cat "$OUT/frida-agent.log" 2>/dev/null | head -30

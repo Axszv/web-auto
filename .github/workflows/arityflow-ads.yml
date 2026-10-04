@@ -119,11 +119,9 @@ jobs:
         shell: bash
         run: |
           set +e
-          # Redroid 的 telephony 未实现，IMEI 是 16 位纯 hex（5efb42d032e3dde4），
-          # 真机是 15 位十进制带 Luhn 校验。这个值会被 App 的 OAID 链塞进广告请求。
-          # 改 getprop 实测无效（SDK 不读系统属性），只能在 framework 层拦截。
-          # App 此刻还没启动，这里先把 server 拉起来并打包 agent，
-          # 真正的 attach 由 arityflow-ads.sh 在 App 起来后触发。
+          # 降级到 Frida 14 再试：17 的 Go 版 frida-inject attach 成功后
+          # 脚本加载即 "Connection closed"，判断是与 Redroid Android 12 的 ART 不兼容。
+          # 14.x 的 frida-inject 还是 Python 版，运行时默认 V8，行为与本地验证时一致。
           bash scripts/frida-start.sh prepare diagnostics
           exit 0
 

@@ -11,9 +11,8 @@ mkdir -p "$out"
 
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
-MAX_ADS="${MAX_ADS:-1}"            # 排查期一轮就够：单轮 3 次 × 150 秒 ≈ 9 分钟就能判定这轮有无库存
-ADS_ATTEMPTS="${ADS_ATTEMPTS:-3}"     # 排查阶段每轮只试 3 次：有货时 attempt 1 即命中（9 秒），等满 150 秒仍无货就判定这轮没戏，不必连试 16 次烧一小时
-# 投产时再调大（MAX_ADS=3 + ADS_ATTEMPTS=16）
+MAX_ADS="${MAX_ADS:-3}"             # 库存有货时能连拿 3 次（CI 用容器自己的 OAID，与真机次数是两套账）
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-16}"    # 投产值：有货时 attempt 1 即命中，没货时多试几轮提高命中率
 ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-20}"   # 两次竞价间隔。判定失败后不必再等 60s —— 现在单次等待已经放宽到 150s，那才是真正需要的时间
 ADS_OPEN_WAIT_TRIES="${ADS_OPEN_WAIT_TRIES:-30}"  # 等广告浮层的轮询次数（×5秒=150s）。实测 Sigmob 服务端最慢要 104 秒才返回
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
@@ -371,16 +370,14 @@ done
 pid="$(app_pid)"
 echo "[ad] app pid: $pid"
 
-# 用 Frida 把 TelephonyManager 报的 IMEI 换成格式合法的真机值。
-#
-# 为什么必须做：Redroid 的 telephony 未实现，getDeviceId() 返回的是
-# 5efb42d032e3dde4 这种 16 位纯 hex；真机是 15 位十进制、带 Luhn 校验位、
-# 前 8 位是厂商 TAC。App 的 OAID 链退到 getIMEI 后，这个一眼假的值会被直接
-# 塞进广告请求。改 getprop 已实测无效（SDK 不读系统属性），只能在 framework 层拦截。
+# Frida hook（IMEI 伪装）已默认关闭 —— ENABLE_FRIDA=1 才启用。
+# 原因：CI 上跑了 11 轮，工具链问题修完（server/agent/inject/参数/提权/V8）后，
+# attach 能成功但脚本加载即 "Connection closed"，判断是 frida-server 17 与
+# Redroid Android 12 的 ART 不兼容。本地跑通了 Sigmob 的 hook，说明方案本身可行，
+# 只是这个组合用不了。留着代码方便日后换 Frida 版本时直接启用。
 if [[ "${ENABLE_FRIDA:-1}" == "1" ]]; then
-  FRIDA_OUT="${FRIDA_OUT:-$out}"
   echo "[ad] frida attach 开始"
-  bash "$script_dir/frida-start.sh" attach "$FRIDA_OUT" 2>&1 | sed 's/^/[ad-frida] /'
+  bash "$script_dir/frida-start.sh" attach "${FRIDA_OUT:-$out}" 2>&1 | sed 's/^/[ad-frida] /'
   sleep 3
 fi
 
