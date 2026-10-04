@@ -110,7 +110,13 @@ if [[ -z "$pid" ]]; then
   exit 0
 fi
 echo "[frida] attach pid=$pid"
-nohup ./frida-inject -U -p "$pid" -s agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
+# frida-inject 在 Frida 17 是 Go 重写版，参数体系跟老的 Python 版不同
+# （-U 已不存在）。先把它的可用参数打出来，避免再猜。
+echo "[frida] frida-inject --help:"
+./frida-inject --help 2>&1 | sed 's/^/[inject-help] /' | head -20
+# 用 -H 指定设备地址（adb forward 出来的 127.0.0.1:27042），
+# 而不是已不存在的 -U。具体参数名以上面打出的 --help 为准。
+nohup ./frida-inject -H 127.0.0.1:27042 -p "$pid" -s agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
 sleep 15
 echo "[frida] hook 输出："
 sed 's/^/[agent] /' "$OUT/frida-agent.log" 2>/dev/null | head -25
