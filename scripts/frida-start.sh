@@ -121,8 +121,11 @@ echo "[frida] frida-inject --help:"
 # 正确写法是 -D/--device（Go 版 frida-inject 的参数体系，-U 和 -H 都不存在，
 # 由上面那次 --help 自省确认）。socket 表示走adb/USB 通道直连设备上的 server；
 # 也可用 -D 127.0.0.1:27042 指定前面 forward 出来的地址。
-nohup ./frida-inject -D socket -p "$pid" -s agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
+# -R v8 是必需的：Frida 17 的 frida-inject 默认跑 qjs(QuickJS)，而我们打包进
+# agent 的 frida-java-bridge 需要 V8 才能用。跑 qjs 会在加载瞬间
+# "Connection closed" —— attach 成功但脚本加载即崩。
+nohup ./frida-inject -D socket -R v8 -p "$pid" -s agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
 sleep 15
-echo "[frida] hook 输出："
-sed 's/^/[agent] /' "$OUT/frida-agent.log" 2>/dev/null | head -25
+echo "[frida] hook 输出（agent 原始日志）："
+cat "$OUT/frida-agent.log" 2>/dev/null | head -30
 exit 0

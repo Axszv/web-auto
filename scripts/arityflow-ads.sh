@@ -379,7 +379,8 @@ echo "[ad] app pid: $pid"
 # 塞进广告请求。改 getprop 已实测无效（SDK 不读系统属性），只能在 framework 层拦截。
 if [[ "${ENABLE_FRIDA:-1}" == "1" ]]; then
   FRIDA_OUT="${FRIDA_OUT:-$out}"
-  echo "[ad] frida attach: $(bash "$script_dir/frida-start.sh" attach "$FRIDA_OUT" 2>&1 | tail -20 | tr '\n' '|')"
+  echo "[ad] frida attach 开始"
+  bash "$script_dir/frida-start.sh" attach "$FRIDA_OUT" 2>&1 | sed 's/^/[ad-frida] /'
   sleep 3
 fi
 
