@@ -16,6 +16,9 @@ set -uo pipefail
 
 MODE="${1:-attach}"
 OUT="${2:-diagnostics}"
+# 转绝对路径：attach 阶段的工作目录未必是仓库根，相对路径会写到不存在的位置
+mkdir -p "$OUT" 2>/dev/null
+OUT="$(cd "$OUT" 2>/dev/null && pwd || echo "$OUT")"
 FRIDA_VER="${FRIDA_VER:-17.22.0}"
 PKG="com.klkjapp.www"
 SERIAL=127.0.0.1:5555
