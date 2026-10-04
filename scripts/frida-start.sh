@@ -114,9 +114,10 @@ echo "[frida] attach pid=$pid"
 # （-U 已不存在）。先把它的可用参数打出来，避免再猜。
 echo "[frida] frida-inject --help:"
 ./frida-inject --help 2>&1 | sed 's/^/[inject-help] /' | head -20
-# 用 -H 指定设备地址（adb forward 出来的 127.0.0.1:27042），
-# 而不是已不存在的 -U。具体参数名以上面打出的 --help 为准。
-nohup ./frida-inject -H 127.0.0.1:27042 -p "$pid" -s agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
+# 正确写法是 -D/--device（Go 版 frida-inject 的参数体系，-U 和 -H 都不存在，
+# 由上面那次 --help 自省确认）。socket 表示走adb/USB 通道直连设备上的 server；
+# 也可用 -D 127.0.0.1:27042 指定前面 forward 出来的地址。
+nohup ./frida-inject -D socket -p "$pid" -s agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
 sleep 15
 echo "[frida] hook 输出："
 sed 's/^/[agent] /' "$OUT/frida-agent.log" 2>/dev/null | head -25
