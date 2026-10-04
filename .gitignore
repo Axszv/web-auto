@@ -4,7 +4,20 @@ logs/
 js/
 pages/
 config/
-scripts/
+# scripts/ 原本用于挡临时调试脚本，但仓库里已有正式脚本跟踪其中内容：
+# arityflow-ads.sh / probe-oaid.sh / redroid-boot.sh / webview-cdp.js /
+# decode-frida-log.js / frida-start.sh / frida/agent-imei.ts
+# 新文件必须显式 force-add，否则会被这行静默吞掉（踩过一次：
+# frida-start.sh 没进仓库，CI 报 No such file or directory）
+scripts/*
+!scripts/arityflow-ads.sh
+!scripts/probe-oaid.sh
+!scripts/redroid-boot.sh
+!scripts/webview-cdp.js
+!scripts/decode-frida-log.js
+!scripts/frida-start.sh
+!scripts/frida/
+
 *.log
 .env
 _inspect*.js
