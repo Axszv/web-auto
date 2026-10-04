@@ -101,14 +101,24 @@ dismiss_immersive_tip() {
 # 文字不渲染成可点击文本（uiautomator 抓不到），只能按位置点。
 # 1080x2400 屏上该按钮区间约 y=2030..2320，中心 (540, 2172)。
 # 之前的兜底是 (540,1500) —— 落在「快手极速版」文字区域，点了个寂寞。
-CTA_FALLBACK="${CTA_FALLBACK:-540 2172}"
+# 快手这类下载广告有两种页面形态，按钮位置不同（run 37207187861 的截图证实）：
+#   A) 沉浸式视频 + 底部卡片：「点击打开或下载第三方应用」在 y≈2172
+#   B) 应用详情页           ：红色「立即下载」按钮在   y≈1676
+# 之前只有 2172，命中 B 时点空 —— cta-clicked 与 after-cta 两张截图完全一样，
+# 说明点击压根没生效，不是「点了没结算」而是「没点到」。
+# 所以按候选列表依次点，命中哪个算哪个；都点完再看结算。
+CTA_CANDIDATES="${CTA_CANDIDATES:-540 1676,540 2100,540 2172}"
 
 click_cta() {
   local xml; xml="$(ui_dump)"
   if [[ -z "$xml" ]]; then
-    echo "[cta] dump 为空（全屏 Canvas/Surface 渲染），坐标兜底 $CTA_FALLBACK"
-    adb_run input tap $CTA_FALLBACK >/dev/null 2>&1 || true
-    sleep 2
+    echo "[cta] dump 为空（全屏 Canvas/Surface 渲染），按候选坐标依次点击"
+    IFS=',' read -ra cands <<< "$CTA_CANDIDATES"
+    for c in "${cands[@]}"; do
+      adb_run input tap $c >/dev/null 2>&1 || true
+      sleep 3
+      ad_is_open || break
+    done
     return 0
   fi
   echo "$xml" > "$out/cta-r${CURRENT_ROUND}-endcard.xml"
@@ -152,8 +162,15 @@ click_cta() {
     echo "[cta] tap $xy"
     adb_run input tap $xy >/dev/null 2>&1 || true
   else
-    echo "[cta] UI 树里没有可点文字（快手的下载按钮是纯色图），坐标兜底 $CTA_FALLBACK"
-    adb_run input tap $CTA_FALLBACK >/dev/null 2>&1 || true
+    echo "[cta] UI 树里没有可点文字，按候选坐标依次点击：$CTA_CANDIDATES"
+    IFS=',' read -ra cands <<< "$CTA_CANDIDATES"
+    for c in "${cands[@]}"; do
+      echo "[cta] tap $c"
+      adb_run input tap $c >/dev/null 2>&1 || true
+      sleep 3
+      # 点了之后如果广告已经不在前台，说明点中了并跳转/关闭，不用再试下一个
+      ad_is_open || { echo "[cta] $c 之后广告已离开前台，停止后续候选"; break; }
+    done
   fi
   sleep 2
 
