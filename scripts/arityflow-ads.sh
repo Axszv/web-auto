@@ -11,7 +11,7 @@ mkdir -p "$out"
 
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
-MAX_ADS="${MAX_ADS:-3}"             # 库存有货时能连拿 3 次（CI 用容器自己的 OAID，与真机次数是两套账）
+MAX_ADS="${MAX_ADS:-2}"             # 验证 JS 层覆盖设备标识：2 轮足够
 ADS_ATTEMPTS="${ADS_ATTEMPTS:-16}"    # 有货时 attempt 1 即命中，没货时多试提高命中率
 ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-20}"   # 两次竞价间隔。判定失败后不必再等 60s —— 现在单次等待已经放宽到 150s，那才是真正需要的时间
 ADS_OPEN_WAIT_TRIES="${ADS_OPEN_WAIT_TRIES:-30}"  # 等广告浮层的轮询次数（×5秒=150s）。实测 Sigmob 服务端最慢要 104 秒才返回
@@ -386,6 +386,21 @@ for _ in $(seq 1 20); do
 done
 pid="$(app_pid)"
 echo "[ad] app pid: $pid"
+
+# 从 JS 层覆盖 jsBridge 的设备标识读取（不需要 Frida）。
+#
+# Redroid 生成的 IMEI 是 5efb42d032e3dde4 这种 16 位纯 hex；真机是 15 位十进制、
+# 带 Luhn 校验位、前 8 位是厂商 TAC。App 的 OAID 链退到 getIMEI 之后会把这个
+# 一眼假的值塞进广告请求。jsBridge 是注入 WebView 的 JS 对象，可以在 JS 层直接替换。
+#
+# patch-ids 内部会起一个 800ms 的定时器反复覆盖，防止原生桥把原方法塞回来。
+if [[ "${PATCH_IDS:-1}" == "1" ]]; then
+  echo "[ad] 覆盖设备标识: $(cdp patch-ids | head -c 400)"
+  sleep 2
+  # 确认 App 读到的是覆盖后的值（id-trace 会显示原生回调是否真的被我们劫持）
+  echo "[ad] 标识读取记录: $(cdp id-trace | head -c 300)"
+  echo "[ad] App 实际读到的 id: $(cdp get-oaid | head -c 200)"
+fi
 
 # Frida hook（IMEI 伪装）已默认关闭 —— ENABLE_FRIDA=1 才启用。
 # 原因：CI 上跑了 11 轮，工具链问题修完（server/agent/inject/参数/提权/V8）后，

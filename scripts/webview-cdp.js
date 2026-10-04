@@ -153,6 +153,71 @@ async function main() {
       })()`);
       break;
     }
+    case 'patch-ids': {
+      // 从 JS 层直接覆盖 jsBridge 的设备标识读取方法。
+      //
+      // 起因：Frida 路线在 CI 上始终跑不起来（17 是 Connection closed，14 是
+      // Unexpected lack of content），但 Frida 想做的事根本不需要它 ——
+      // jsBridge 是注入到 WebView 的 JS 对象（addJavascriptInterface），
+      // 它的方法可以在 JS 层直接替换掉。
+      //
+      // Redroid 生成的 IMEI 形如 5efb42d032e3dde4：16 位纯 hex。真机 IMEI 是
+      // 15 位十进制、带 Luhn 校验位、前 8 位是厂商 TAC（TAC）。格式本身就
+      // 一眼假，而 App 的 OAID 链退到 getIMEI 后会把它塞进广告请求。
+      // 这里把它换成小米 TAC + 合法 Luhn 校验位的值。
+      const imei = args[0] || '8609110312345670';
+      const imsi = args[1] || '460001234567890';
+      const did  = args[2] || 'a1b2c3d4e5f60718';
+      out = await evaluate(`(() => {
+        const B = window.jsBridge;
+        if (!B) return { error: 'no jsBridge' };
+        window.__patched = [];
+        // 装一个 setInterval 反复覆盖 —— 原生桥可能在我们覆盖之后又重新注入，
+        // 或者 App 内部缓存了原始引用。每 800ms 盖一次，成本可忽略。
+        if (window.__idPatchTimer) clearInterval(window.__idPatchTimer);
+        const apply = () => {
+          const targets = [
+            ['getIMEI', ${JSON.stringify(imei)}],
+            ['getImei', ${JSON.stringify(imei)}],
+            ['getDeviceId', ${JSON.stringify(did)}],
+            ['getOAIDv2', ${JSON.stringify(did)}],
+            ['getOAID', ${JSON.stringify(did)}],
+          ];
+          const report = [];
+          for (const [name, val] of targets) {
+            try {
+              if (typeof B[name] !== 'function') { report.push(name + ': 不存在'); continue; }
+              if (B[name].__patched) { report.push(name + ': 已是覆盖版'); continue; }
+              const fn = function () {
+                const args = Array.prototype.slice.call(arguments);
+                window.__patched.push({ fn: name, at: Date.now() });
+                const cb = args[args.length - 1];
+                if (typeof cb === 'function') {
+                  try { cb(val); } catch (e) { try { cb(true, val); } catch (e2) {} }
+                }
+                return val;
+              };
+              fn.__patched = true;
+              B[name] = fn;
+              report.push(name + ': 已覆盖');
+            } catch (e) { report.push(name + ': 失败 ' + e.message); }
+          }
+          window.__patchReport = report;
+        };
+        apply();
+        window.__idPatchTimer = setInterval(apply, 800);
+        return { report: window.__patchReport, imei: ${JSON.stringify(imei)} };
+      })()`);
+      break;
+    }
+    case 'id-trace': {
+      // 看覆盖之后 App 到底读到了什么（原生回调是否真的被我们劫持）
+      out = await evaluate(`(() => ({
+        patchedCalls: window.__patched || [],
+        count: (window.__patched || []).length
+      }))()`);
+      break;
+    }
     case 'user-info': {
       // 权威判据来源：前端登录后把用户信息（含额度 quota）存在 localStorage。
       // adcap/quota 的 viewed_today 依赖 OAID 匹配，OAID 变了就永远查不到，
