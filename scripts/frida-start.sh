@@ -63,14 +63,18 @@ echo "[frida] frida-server 就绪，端口已转发"
 # ---- 2. 打包 agent ----
 AGENT_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/frida/agent-imei.ts"
 cp "$AGENT_SRC" "$WORK/"
-[[ -f package.json ]] || npm init -y >/dev/null 2>&1
+[[ -f package.json ]] || npm init -y > npm.log 2>&1
 if [[ ! -d node_modules/frida-compile ]]; then
-  npm install --no-audit --no-fund frida-java-bridge frida-compile >/dev/null 2>&1
+  # runner 上 npm 较慢，加超时兜底；失败也不阻塞主流程
+  timeout 300 npm install --no-audit --no-fund --prefer-offline frida-java-bridge frida-compile > npm.log 2>&1 || echo "[frida] npm install 超时或失败"
 fi
 # Frida 17 把 Java bridge 移出了内核，必须显式 import 再用 frida-compile 打包
-npx frida-compile agent-imei.ts -o agent-bundle.js >/dev/null 2>&1
+npx frida-compile agent-imei.ts -o agent-bundle.js > compile.log 2>&1
 if [[ ! -s agent-bundle.js ]]; then
-  echo "[frida] agent 打包失败，跳过"; exit 0
+  echo "[frida] agent 打包失败，日志："
+  sed "s/^/[npm] /" npm.log 2>/dev/null | tail -15
+  sed "s/^/[compile] /" compile.log 2>/dev/null | tail -15
+  exit 0
 fi
 echo "[frida] agent 打包完成 ($(stat -c%s agent-bundle.js) bytes)"
 
