@@ -55,7 +55,11 @@ fi
 adb -s "$SERIAL" push frida-server /data/local/tmp/frida-server >/dev/null 2>&1
 adb -s "$SERIAL" shell "chmod 755 /data/local/tmp/frida-server" >/dev/null 2>&1
 adb -s "$SERIAL" shell "pkill -f frida-server" >/dev/null 2>&1
-adb -s "$SERIAL" shell "nohup /data/local/tmp/frida-server -l 0.0.0.0:27042 >/data/local/tmp/frida.log 2>&1 &" >/dev/null 2>&1
+# 必须以 root 身份起 —— 否则 attach 时 ptrace 权限不够，报
+# "Unable to access process with pid X"。Redroid 的 shell 默认不是 root。
+adb -s "$SERIAL" shell "su -c 'nohup /data/local/tmp/frida-server -l 0.0.0.0:27042 >/data/local/tmp/frida.log 2>&1 &'" >/dev/null 2>&1
+# yama ptrace_scope=1 会拦下跨进程 attach，放开它
+adb -s "$SERIAL" shell "su -c 'echo 0 > /proc/sys/kernel/yama/ptrace_scope'" >/dev/null 2>&1 || true
 sleep 5
 adb -s "$SERIAL" forward tcp:27042 tcp:27042 >/dev/null 2>&1
 if ! adb -s "$SERIAL" shell "cat /data/local/tmp/frida.log" 2>/dev/null | grep -qiE "listening|started|server"; then
