@@ -14,14 +14,14 @@ on:
         default: '3'
         type: string
       ads_attempts:
-        description: Clicks on 「看广告」 per round (Sigmob has only 1 slot, each click = one bid)
+        description: Clicks on 「看广告」 per round (Sigmob has only 1 slot, each click = one bid). 留空则用脚本默认值（排查期 3，投产后可调到 16）
         required: false
-        default: '16'
+        default: ''
         type: string
       ads_retry_wait:
-        description: Seconds between bids (too short triggers rate limiting)
+        description: Seconds between bids (too short triggers rate limiting). 留空则用脚本默认值
         required: false
-        default: '60'
+        default: ''
         type: string
 
 permissions:
@@ -133,8 +133,10 @@ jobs:
           ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
           MAX_ADS: ${{ inputs.max_ads || '3' }}
-          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '16' }}
-          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '60' }}
+          # 只在手动指定时导出；不指定则由 scripts/arityflow-ads.sh 里的默认值决定，
+          # 避免 env 与脚本默认值不同步（env 优先级更高，会静默覆盖脚本设置）。
+          ADS_ATTEMPTS: ${{ inputs.ads_attempts }}
+          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait }}
         shell: bash
         run: |
           if [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then

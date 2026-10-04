@@ -11,9 +11,9 @@ mkdir -p "$out"
 
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
-MAX_ADS="${MAX_ADS:-3}"
-ADS_ATTEMPTS="${ADS_ATTEMPTS:-4}"     # 每轮竞价次数。单次判定要等 150s（实测 Sigmob 最慢 104 秒），4 次刚好一轮约 12 分钟；
-                                      # 一天 4 时段共 16 次竞价铺满，总时长可控
+MAX_ADS="${MAX_ADS:-1}"            # 排查期一轮就够：单轮 3 次 × 150 秒 ≈ 9 分钟就能判定这轮有无库存
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-3}"     # 排查阶段每轮只试 3 次：有货时 attempt 1 即命中（9 秒），等满 150 秒仍无货就判定这轮没戏，不必连试 16 次烧一小时
+# 投产时再调大（MAX_ADS=3 + ADS_ATTEMPTS=16）
 ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-20}"   # 两次竞价间隔。判定失败后不必再等 60s —— 现在单次等待已经放宽到 150s，那才是真正需要的时间
 ADS_OPEN_WAIT_TRIES="${ADS_OPEN_WAIT_TRIES:-30}"  # 等广告浮层的轮询次数（×5秒=150s）。实测 Sigmob 服务端最慢要 104 秒才返回
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
