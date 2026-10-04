@@ -118,13 +118,11 @@ echo "[frida] attach pid=$pid"
 # （-U 已不存在）。先把它的可用参数打出来，避免再猜。
 # Frida 14 的 frida-inject 仍是 Python 版：设备用 -U（USB/adb 通道），
 # 脚本文件用 -l 而不是 -s（-s 是 Frida 15+ Go 版的参数）。
-# Frida 14 的 frida-inject 是 Python 脚本，需要宿主有 python3 和匹配版本的
-# frida 模块。runner 上自带 python3；版本必须与 frida-server 一致，否则连不上。
-if ! python3 -c "import frida" 2>/dev/null; then
-  echo "[frida] 安装 python frida ${FRIDA_VER}"
-  python3 -m pip install --quiet --disable-pip-version-check "frida==${FRIDA_VER}" > pip.log 2>&1
-fi
-nohup python3 ./frida-inject -U -p "$pid" -l agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
+# 注意：Frida 14 的 frida-inject 依然是 Go 编译的 ELF 二进制（不是 Python 脚本），
+# 上一轮误用 `python3 ./frida-inject` 执行，报
+#   SyntaxError: source code cannot contain null bytes
+# 所以直接当二进制运行。参数体系与17 相同：-D 指定设备、-s 指定脚本。
+nohup ./frida-inject -D socket -p "$pid" -s agent-bundle.js > "$OUT/frida-agent.log" 2>&1 &
 sleep 15
 echo "[frida] hook 输出（agent 原始日志）："
 cat "$OUT/frida-agent.log" 2>/dev/null | head -30

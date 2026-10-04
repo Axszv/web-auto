@@ -11,8 +11,8 @@ mkdir -p "$out"
 
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
-MAX_ADS="${MAX_ADS:-3}"             # 库存有货时能连拿 3 次（CI 用容器自己的 OAID，与真机次数是两套账）
-ADS_ATTEMPTS="${ADS_ATTEMPTS:-16}"    # 投产值：有货时 attempt 1 即命中，没货时多试几轮提高命中率
+MAX_ADS="${MAX_ADS:-1}"             # Frida 验证轮：1 轮 × 3 次 ≈ 12 分钟，只看 hook 是否生效
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-3}"    # 同上，排查期压到3 次
 ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-20}"   # 两次竞价间隔。判定失败后不必再等 60s —— 现在单次等待已经放宽到 150s，那才是真正需要的时间
 ADS_OPEN_WAIT_TRIES="${ADS_OPEN_WAIT_TRIES:-30}"  # 等广告浮层的轮询次数（×5秒=150s）。实测 Sigmob 服务端最慢要 104 秒才返回
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
