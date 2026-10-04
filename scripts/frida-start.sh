@@ -82,7 +82,22 @@ echo "[frida] agent 打包完成 ($(stat -c%s agent-bundle.js) bytes)"
 if [[ "$MODE" != "attach" ]]; then echo "[frida] prepare 完成"; exit 0; fi
 
 cd "$WORK" || exit 1
-[[ -x ./frida-inject ]] || { echo "[frida] frida-inject 未就绪，跳过 attach"; exit 0; }
+
+# frida-inject 客户端跑在 runner 上（linux-arm64），通过 adb 连容器里的
+# frida-server。之前把脚本拆成 prepare/attach 两阶段时，这段下载逻辑被误删了，
+# attach 阶段直接引用一个不存在的文件 → "frida-inject 未就绪"。
+if [[ ! -x ./frida-inject ]]; then
+  echo "[frida] 下载 frida-inject (linux-arm64)"
+  if dl "https://github.com/frida/frida/releases/download/${FRIDA_VER}/frida-inject-${FRIDA_VER}-linux-arm64.xz" finj.xz && unxz finj.xz frida-inject; then
+    chmod +x frida-inject
+    echo "[frida] frida-inject 就绪 ($(stat -c%s frida-inject) bytes)"
+  else
+    echo "[frida] frida-inject 下载/解压失败"
+    sed 's/^/[dl] /' finj.xz 2>/dev/null | head -3
+    exit 0
+  fi
+fi
+[[ -x ./frida-inject ]] || { echo "[frida] frida-inject 仍不可用，跳过 attach"; exit 0; }
 [[ -s agent-bundle.js ]] || { echo "[frida] agent 未就绪，跳过 attach"; exit 0; }
 adb -s "$SERIAL" forward tcp:27042 tcp:27042 >/dev/null 2>&1
 
