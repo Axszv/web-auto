@@ -15,18 +15,16 @@ const FAKE_ANDROID_ID = '7d3f1a9c5e2b8406';
 
 Java.perform(function () {
   // ---- IMEI：TelephonyManager.getDeviceId() / getImei() ----
-  ['getDeviceId', 'getImei'].forEach(function (m) {
+  ['getDeviceId', 'getImei'].forEach(function (m: string) {
     try {
       const TM = Java.use('android.telephony.TelephonyManager');
       if (!TM[m]) return;
-      TM[m].overloads.forEach(function (ov) {
+      TM[m].overloads.forEach(function (ov: any) {
         ov.implementation = function () {
           try {
             const orig = ov.apply(this, arguments);
-            // 有真实值就用假的替换；本来就空则直接给假值
-            const replaced = orig && orig.toString() ? FAKE_IMEI : FAKE_IMEI;
-            console.log('[IMEI] ' + m + ' 原值=' + String(orig) + ' -> 改为 ' + replaced);
-            return replaced;
+            console.log('[IMEI] ' + m + ' 原值=' + String(orig) + ' -> 改为 ' + FAKE_IMEI);
+            return FAKE_IMEI;
           } catch (e) {
             return FAKE_IMEI;
           }
@@ -43,7 +41,7 @@ Java.perform(function () {
     ['android.telephony.TelephonyManager', 'getLine1Number', '13800138000'],
     ['android.provider.Settings$Secure', 'getString', ''],   // 不动，仅占位
   ];
-  fixes.forEach(function (p) {
+  fixes.forEach(function (p: [string, string, string]) {
     if (!p[2]) return;
     try {
       const C: any = Java.use(p[0]);
