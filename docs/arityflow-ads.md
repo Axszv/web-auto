@@ -175,3 +175,44 @@ adb -s 127.0.0.1:5555 shell "su -c 'cat /data/local/tmp/f5.log'" | node scripts/
 ```
 
 关键包名是 **`com.czhj.sdk`**，别再搜 `com.sigmob`。
+
+## Frida 路线的结论（已放弃）
+
+2026-10-04 尝试用 Frida hook `TelephonyManager.getDeviceId()`，把 Redroid 生成的
+假 IMEI（`5efb42d032e3dde4`，16 位纯 hex）换成格式合法的真机值
+（`8609110312345670`，小米 TAC + Luhn 校验位）。
+
+**结果：CI 上不可用。** Frida 17 的 Go 版 frida-inject 在 attach 成功后脚本加载即
+`Connection closed`；降到 14.2.18（Python 版客户端）后错误变成
+`Unexpected lack of content trying to read a line`。两种情况都说明 agent 没有真正
+跑起来，所以**「SDK 到底认不认这个 IMEI」这个假设至今没有被验证过**。
+
+工具链本身在 CI 上全部打通了（server 起动、agent 754KB 打包、inject 下载、
+参数 `-D socket`、su 提权、绝对路径日志），卡点只在最后的脚本加载。
+本地（雷电）用同一套代码 hook Sigmob 是成功的，所以方案本身可行，
+但这个容器组合用不了。代码保留在 `scripts/frida/`，需要时可再启用
+（`ENABLE_FRIDA=1`）。
+
+**这条线一共花了约 13 轮 run，绝大部分花在修工具链自身的问题上**
+（架构不兼容的参数体系、gitignore 静默吞文件、TS 编译错误、
+下载逻辑被自己重构删掉、相对路径写不进 artifact……），
+真正有价值的只有最后通过看截图发现的 CTA 坐标问题。
+
+## 快手广告的两种页面形态（重要）
+
+`run 37207187861` 的截图揭示了 CTA 坐标为什么一直点空：
+
+| 形态 | 按钮 | 原始坐标 |
+|---|---|---|
+| A 沉浸式视频 + 底部卡片 | 点击打开或下载第三方应用 | (540, 2172) |
+| B 应用详情页 | 红色「立即下载」大按钮 | **(540, 1676)** |
+
+差了近 500 像素。之前只有 2172，命中 B 时完全点空 ——
+`cta-clicked.png` 和 `after-cta.png` 两张截图一模一样，画面零变化，
+说明是「没点到」而不是「点了没结算」。
+
+现在改成候选坐标依次点击（1676 / 2100 / 2172），点完一个就检查广告是否还在
+前台，离开即说明点中并跳转了。
+
+另外：这两轮里 uiautomator dump 到的文本都是点击前的旧内容（有延迟），
+所以不能只依赖 dump 找按钮，坐标候选是必要的兜底。

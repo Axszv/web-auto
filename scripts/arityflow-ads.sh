@@ -11,8 +11,8 @@ mkdir -p "$out"
 
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
-MAX_ADS="${MAX_ADS:-1}"             # Frida 验证轮：1 轮 × 3 次 ≈ 12 分钟，只看 hook 是否生效
-ADS_ATTEMPTS="${ADS_ATTEMPTS:-3}"    # 同上，排查期压到3 次
+MAX_ADS="${MAX_ADS:-3}"             # 库存有货时能连拿 3 次（CI 用容器自己的 OAID，与真机次数是两套账）
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-16}"    # 有货时 attempt 1 即命中，没货时多试提高命中率
 ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-20}"   # 两次竞价间隔。判定失败后不必再等 60s —— 现在单次等待已经放宽到 150s，那才是真正需要的时间
 ADS_OPEN_WAIT_TRIES="${ADS_OPEN_WAIT_TRIES:-30}"  # 等广告浮层的轮询次数（×5秒=150s）。实测 Sigmob 服务端最慢要 104 秒才返回
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
@@ -392,7 +392,7 @@ echo "[ad] app pid: $pid"
 # attach 能成功但脚本加载即 "Connection closed"，判断是 frida-server 17 与
 # Redroid Android 12 的 ART 不兼容。本地跑通了 Sigmob 的 hook，说明方案本身可行，
 # 只是这个组合用不了。留着代码方便日后换 Frida 版本时直接启用。
-if [[ "${ENABLE_FRIDA:-1}" == "1" ]]; then
+if [[ "${ENABLE_FRIDA:-0}" == "1" ]]; then
   echo "[ad] frida attach 开始"
   bash "$script_dir/frida-start.sh" attach "${FRIDA_OUT:-$out}" 2>&1 | sed 's/^/[ad-frida] /'
   sleep 3

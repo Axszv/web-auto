@@ -115,16 +115,6 @@ jobs:
           bash scripts/probe-oaid.sh diagnostics
           exit 0
 
-      - name: Start Frida hook (rewrite IMEI to a valid device identity)
-        shell: bash
-        run: |
-          set +e
-          # 降级到 Frida 14 再试：17 的 Go 版 frida-inject attach 成功后
-          # 脚本加载即 "Connection closed"，判断是与 Redroid Android 12 的 ART 不兼容。
-          # 14.x 的 frida-inject 还是 Python 版，运行时默认 V8，行为与本地验证时一致。
-          bash scripts/frida-start.sh prepare diagnostics
-          exit 0
-
       - name: Watch daily rewarded ads
         env:
           ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
