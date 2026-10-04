@@ -371,6 +371,18 @@ done
 pid="$(app_pid)"
 echo "[ad] app pid: $pid"
 
+# 用 Frida 把 TelephonyManager 报的 IMEI 换成格式合法的真机值。
+#
+# 为什么必须做：Redroid 的 telephony 未实现，getDeviceId() 返回的是
+# 5efb42d032e3dde4 这种 16 位纯 hex；真机是 15 位十进制、带 Luhn 校验位、
+# 前 8 位是厂商 TAC。App 的 OAID 链退到 getIMEI 后，这个一眼假的值会被直接
+# 塞进广告请求。改 getprop 已实测无效（SDK 不读系统属性），只能在 framework 层拦截。
+if [[ "${ENABLE_FRIDA:-1}" == "1" ]]; then
+  FRIDA_OUT="${FRIDA_OUT:-$out}"
+  echo "[ad] frida attach: $(bash "$script_dir/frida-start.sh" attach "$FRIDA_OUT" 2>&1 | tail -20 | tr '\n' '|')"
+  sleep 3
+fi
+
 # 容器内网络连通性诊断（Redroid 能否访问后端 API 和广告平台）
 echo "[ad] net check:"
 {

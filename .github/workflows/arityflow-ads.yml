@@ -5,10 +5,7 @@ on:
     # UTC 01:17 = 北京 09:17。
     # a-n-y-router.top 广告额度 +24.7/次、每天 3 次
     # 需真实播放（Redroid ARM64 + 伪装真机才有素材），纯 HTTP 无法发额度
-    - cron: '17 1 * * *'    # UTC 01:17 = 北京 09:17
-    - cron: '17 6 * * *'    # UTC 06:17 = 北京 14:17
-    - cron: '19 10 * * *'   # UTC 10:19 = 北京 18:19（已实证在此窗口出货过）
-    - cron: '17 14 * * *'   # UTC 14:17 = 北京 22:17
+    - cron: '17 1 * * *'
   workflow_dispatch:
     inputs:
       max_ads:
@@ -19,7 +16,7 @@ on:
       ads_attempts:
         description: Clicks on 「看广告」 per round (Sigmob has only 1 slot, each click = one bid)
         required: false
-        default: '4'
+        default: '16'
         type: string
       ads_retry_wait:
         description: Seconds between bids (too short triggers rate limiting)
@@ -96,13 +93,6 @@ jobs:
             androidboot.redroid_height=2400 \
             androidboot.redroid_dpi=420 \
             androidboot.redroid_gpu_mode=guest \
-            ro.hardware=qcom \
-            ro.hardware.egl=adreno \
-            ro.product.board=pudding \
-            ro.build.tags=release-keys \
-            ro.build.type=user \
-            ro.build.characteristics=phone \
-            ro.boot.verifiedbootstate=green \
             ro.product.model=25060RK16C \
             ro.product.brand=REDMI \
             ro.product.manufacturer=Xiaomi \
@@ -116,33 +106,7 @@ jobs:
 
       - name: Wait for Android boot
         shell: bash
-        run: |
-          set +e
-          bash scripts/redroid-boot.sh diagnostics
-          # 兜底：若上面注入的设备属性导致 Android 起不来（上次 ro.debuggable=0
-          # 就把 boot_completed 卡成了空），就地移除全部伪装用干净配置重建。
-          if ! adb -s 127.0.0.1:5555 shell true 2>/dev/null; then
-            echo "[warn] 设备属性导致启动异常，移除伪装后重建容器"
-            docker rm -f redroid >/dev/null 2>&1
-            docker run -d --name redroid --privileged \
-              -p 5555:5555 --dns 8.8.8.8 --dns 1.1.1.1 "$REDROID_IMAGE" \
-              androidboot.redroid_width=1080 \
-              androidboot.redroid_height=2400 \
-              androidboot.redroid_dpi=420 \
-              androidboot.redroid_gpu_mode=guest \
-              ro.product.model=25060RK16C \
-              ro.product.brand=REDMI \
-              ro.product.manufacturer=Xiaomi \
-              ro.product.name=Redmi\ K80 \
-              ro.product.device=pudding \
-              ro.build.product=pudding \
-              ro.build.flavor=redmi \
-              ro.build.fingerprint=Xiaomi/pudding/pudding:14/UKQ1.230804.001/V14.0.4.0.UJSCN:user/release-keys \
-              ro.miui.ui.version.name=HyperOS2.0 \
-              ro.product.locale=zh-CN >/dev/null
-            bash scripts/redroid-boot.sh diagnostics
-          fi
-          exit 0
+        run: bash scripts/redroid-boot.sh diagnostics
 
       - name: Probe OAID support in Redroid
         shell: bash
@@ -151,14 +115,26 @@ jobs:
           bash scripts/probe-oaid.sh diagnostics
           exit 0
 
+      - name: Start Frida hook (rewrite IMEI to a valid device identity)
+        shell: bash
+        run: |
+          set +e
+          # Redroid 的 telephony 未实现，IMEI 是 16 位纯 hex（5efb42d032e3dde4），
+          # 真机是 15 位十进制带 Luhn 校验。这个值会被 App 的 OAID 链塞进广告请求。
+          # 改 getprop 实测无效（SDK 不读系统属性），只能在 framework 层拦截。
+          # App 此刻还没启动，这里先把 server 拉起来并打包 agent，
+          # 真正的 attach 由 arityflow-ads.sh 在 App 起来后触发。
+          bash scripts/frida-start.sh prepare diagnostics
+          exit 0
+
       - name: Watch daily rewarded ads
         env:
           ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
           ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}
           MAX_ADS: ${{ inputs.max_ads || '3' }}
-          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '4' }}
-          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '20' }}
+          ADS_ATTEMPTS: ${{ inputs.ads_attempts || '16' }}
+          ADS_RETRY_WAIT: ${{ inputs.ads_retry_wait || '60' }}
         shell: bash
         run: |
           if [[ -z "$ARITY_USER" || -z "$ARITY_PASS" ]]; then
