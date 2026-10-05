@@ -11,8 +11,8 @@ mkdir -p "$out"
 
 PKG="com.klkjapp.www"
 ACT="com.lt.app.MainActivity"
-MAX_ADS="${MAX_ADS:-2}"             # 验证 JS 层覆盖设备标识：2 轮足够
-ADS_ATTEMPTS="${ADS_ATTEMPTS:-16}"    # 有货时 attempt 1 即命中，没货时多试提高命中率
+MAX_ADS="${MAX_ADS:-1}"             # build.prop 验证轮：1 轮即可
+ADS_ATTEMPTS="${ADS_ATTEMPTS:-3}"    # 同上，3 次足够判断有没有出货
 ADS_RETRY_WAIT="${ADS_RETRY_WAIT:-20}"   # 两次竞价间隔。判定失败后不必再等 60s —— 现在单次等待已经放宽到 150s，那才是真正需要的时间
 ADS_OPEN_WAIT_TRIES="${ADS_OPEN_WAIT_TRIES:-30}"  # 等广告浮层的轮询次数（×5秒=150s）。实测 Sigmob 服务端最慢要 104 秒才返回
 OAID="1ed4c87b179ff56d"   # 从真机抓包拿到的设备标识（不依赖原生桥，避免 IMEI 权限问题）
@@ -490,14 +490,19 @@ if [[ "${SPOOF_PROPS:-1}" == "1" ]]; then
     done
     echo "--- 重启容器让 Android 重新读取"
     docker restart redroid >/dev/null 2>&1
-    sleep 20
-    adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
-    for _ in $(seq 1 30); do
+    # 重启后 Android 要重新起（上一轮只等 120 秒且失败后没重连 adb，
+    # 结果 getprop 全空 —— 其实 build.prop 已经改对了，纯粹是查询时机不对）
+    for _ in $(seq 1 60); do
+      adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
       b="$(adb_quick getprop sys.boot_completed 2>/dev/null | tr -d '')"
-      [[ "$b" == "1" ]] && break
-      sleep 4
+      if [[ "$b" == "1" ]]; then
+        echo "  boot_completed=1（第 $_ 次探测）"
+        break
+      fi
+      [[ $_ -eq 1 || $_ -eq 20 || $_ -eq 40 ]] && echo "  等待中... boot=$b"
+      sleep 5
     done
-    adb wait-for-device >/dev/null 2>&1 || true
+    sleep 5
     echo "--- 重启后 getprop 实际值"
     for p in ro.hardware ro.build.tags ro.build.type ro.build.characteristics; do
       echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
