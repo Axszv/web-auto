@@ -29,14 +29,24 @@ permissions:
   contents: read
 
 concurrency:
-  group: arityflow-ads
-  cancel-in-progress: false
+  # 按 matrix 索引分组，让不同 IP 的采样能并发跑。原来固定成 arityflow-ads
+  # 会把所有 run 串行化 —— 同一时间只有一个 run，永远只能抽到一个出口 IP，
+  # 命中概率就固定在单 IP 上。实测 10-02 成功、之后全灭，最可能的解释就是
+  # runner IP 池里「干净 IP」的比例波动。
+  group: arityflow-ads-${{ github.run_attempt }}-${{ strategy.job-index || 0 }}
 
 jobs:
   ads:
     # ARM64 原生 runner（免费账号可用），Redroid 容器跑 arm64 Android
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      # 一次并发采样多个 runner IP。GDT 的 109502「该广告位请求量大而收入较低」
+      # 是按 IP 独立统计的，所以分成多个 run 各自少量请求，既避开降填充，
+      # 又能覆盖多个不同出口 IP —— 单 IP 死磕的命中率被 IP 池质量锁死了。
+      matrix:
+        ip_sample: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
 
@@ -125,6 +135,7 @@ jobs:
 
       - name: Watch daily rewarded ads
         env:
+          IP_SAMPLE: ${{ strategy.job-index }}
           ARITY_USER: ${{ secrets.ARITYFLOW_USER }}
           ARITY_PASS: ${{ secrets.ARITYFLOW_PASSWORD }}
           ARITY_CODE: ${{ secrets.ARITYFLOW_CODE }}

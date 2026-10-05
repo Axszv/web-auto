@@ -422,7 +422,8 @@ if [[ "${ENABLE_FRIDA:-0}" == "1" ]]; then
 fi
 
 # 容器内网络连通性诊断（Redroid 能否访问后端 API 和广告平台）
-echo "[ad] net check:"
+echo "[ad] IP 采样 #$IP_SAMPLE （6 个并发 run 各自独立出口 IP）"
+  echo "[ad] net check:"
 {
   # 出口 IP：这是判断「广告为什么不出货」的关键维度。
   # 实测真机换美国 IP 就「当前无广告」，换国内 IP 就正常；而 CI 用美国 IP
