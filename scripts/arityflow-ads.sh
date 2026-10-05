@@ -492,6 +492,50 @@ echo "[ad] bridge methods: $(cdp bridge-list)"
 echo "[ad] getloadFailMessage: $(cdp call-bridge getloadFailMessage '{}' 2>&1 | head -c 400)"
 
 # 读取本机（Redroid）真实设备标识，供 adcap 查询用；不用真机硬编码值
+# === Redroid 属性伪装能力实测 ===
+# 已知踩过的坑：docker run -e ro.hardware=qcom 不生效，getprop 读出来仍是 redroid。
+# Redroid 只把 androidboot.* 前缀的环境变量转成系统属性。这里实测到底哪种方式可行，
+# 才知道「改 getprop」这条路是不是根本没走过。
+if [[ "${SPOOF_PROPS:-1}" == "1" ]]; then
+  echo "[ad] --- 属性伪装能力实测 ---"
+  {
+    echo "--- 改前"
+    for p in ro.hardware ro.product.model ro.product.brand ro.product.manufacturer              ro.product.device ro.product.name ro.build.fingerprint ro.build.tags              ro.build.type ro.build.characteristics ro.product.board ro.secure; do
+      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
+    done
+    echo "--- 尝试 setprop（ro.* 运行时通常只读）"
+    adb_quick setprop ro.hardware qcom
+    adb_quick setprop ro.build.tags release-keys
+    adb_quick setprop ro.build.type user
+    adb_quick setprop ro.build.characteristics phone
+    sleep 2
+    for p in ro.hardware ro.build.tags ro.build.type ro.build.characteristics; do
+      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
+    done
+  } 2>&1 | tee "$out/prop-probe.txt" | sed 's/^/[ad] /'
+  echo "[ad] --- 改 build.prop（Redroid 是 --privileged，可remount）---"
+  {
+    echo "--- 尝试 remount 并改写 build.prop"
+    adb_quick su -c 'mount -o remount,rw /system' 2>&1 | head -2
+    adb_quick su -c 'mount | grep " / "' 2>&1 | head -2
+    # 先备份，再按行替换关键属性
+    adb_quick su -c 'cp /system/build.prop /data/local/tmp/build.prop.bak' 2>&1 | head -1
+    for kv in "ro.hardware=qcom" "ro.board.platform=kalama" "ro.product.board=pudding"; do
+      k="${kv%%=*}"; v="${kv#*=}"
+      adb_quick su -c "sed -i 's|^\$k=.*|\$k=\$v|' /system/build.prop" 2>&1 | head -1
+    done
+    adb_quick su -c 'sync' >/dev/null 2>&1
+    sleep 3
+    echo "--- 改后（若与改前不同则 build.prop 可写）"
+    for p in ro.hardware ro.board.platform ro.product.board; do
+      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
+    done
+  } 2>&1 | tee -a "$out/prop-probe.txt" | sed 's/^/[ad] /'
+  echo "[ad] --- build.prop 处理结束（改完需重启 Android 才完全生效）---"
+
+  echo "[ad] --- 实测结束 ---"
+fi
+
 OAID_JSON="$(cdp get-oaid)"
 echo "[ad] device id: $OAID_JSON"
 DEVICE_OAID="$(echo "$OAID_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const j=JSON.parse(d.trim());console.log(j.id||'')}catch{console.log('')}})" 2>/dev/null)"

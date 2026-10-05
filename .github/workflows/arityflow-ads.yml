@@ -93,6 +93,13 @@ jobs:
             androidboot.redroid_height=2400 \
             androidboot.redroid_dpi=420 \
             androidboot.redroid_gpu_mode=guest \
+            androidboot.hardware=qcom \
+            androidboot.hardware.egl=adreno \
+            androidboot.hardware.vulkan=adreno \
+            androidboot.product.board=pudding \
+            androidboot.board.platform=kalama \
+            androidboot.product.cpu.abi=arm64-v8a \
+            androidboot.product.locale=zh-CN \
             ro.product.model=25060RK16C \
             ro.product.brand=REDMI \
             ro.product.manufacturer=Xiaomi \
