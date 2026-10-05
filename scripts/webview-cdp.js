@@ -218,6 +218,100 @@ async function main() {
       }))()`);
       break;
     }
+    case 'patch-and-verify': {
+      // 在同一个 CDP 会话里完成三件事：装 pre-document 补丁 → 重启 App 让它
+      // 带着补丁重新初始化 → 验证 App 读到的标识。
+      //
+      // 关键约束：Page.addScriptToEvaluateOnNewDocument 按**会话**生效，
+      // 而 webview-cdp.js 每次调用都是新的连接。所以「装补丁」和「使用补丁」
+      // 必须在同一次调用里完成，分开调用等于没装。
+      const { execFileSync } = require('child_process');
+      const ADB = 'adb';
+      const SER = args[0] || '127.0.0.1:5555';
+      const imei = args[1] || '8609110312345670';
+      const did  = args[2] || 'a1b2c3d4e5f60718';
+
+      const src = `
+        (function () {
+          try {
+            var B = window.jsBridge;
+            if (!B) return;
+            if (window.__idPatched) return;
+            window.__idPatched = true;
+            window.__patched = [];
+            var targets = {
+              getIMEI: ${JSON.stringify(imei)},
+              getImei: ${JSON.stringify(imei)},
+              getDeviceId: ${JSON.stringify(did)},
+              getOAIDv2: ${JSON.stringify(did)},
+              getOAID: ${JSON.stringify(did)}
+            };
+            for (var name in targets) {
+              try {
+                if (typeof B[name] !== 'function') continue;
+                var val = targets[name];
+                var fn = function () {
+                  window.__patched.push({ fn: name, at: Date.now() });
+                  var a = Array.prototype.slice.call(arguments);
+                  var cb = a[a.length - 1];
+                  if (typeof cb === 'function') {
+                    try { cb(val); } catch (e) { try { cb(true, val); } catch (e2) {} }
+                  }
+                  return val;
+                };
+                fn.__patched = true;
+                B[name] = fn;
+              } catch (e) {}
+            }
+          } catch (e) {}
+        })();
+      `;
+      await send('Page.addScriptToEvaluateOnNewDocument', { source: src });
+      await evaluate(src);
+
+      // 重启 App：pre-document 补丁会在新的 WebView document 加载前执行
+      execFileSync(ADB, ['-s', SER, 'shell', 'am force-stop', 'com.klkjapp.www'], { stdio: 'ignore' });
+      await new Promise(r => setTimeout(r, 3000));
+      execFileSync(ADB, ['-s', SER, 'shell', 'am start', '-n', 'com.klkjapp.www/com.lt.app.MainActivity'], { stdio: 'ignore' });
+
+      // 等新 document 加载 + 补丁执行完
+      await new Promise(r => setTimeout(r, 25000));
+      const trace = await evaluate(`(function () {
+        return { patched: window.__patched || [], count: (window.__patched || []).length,
+                 patchedFlag: !!window.__idPatched, hasBridge: !!window.jsBridge };
+      })()`);
+
+      // 直接调 getIMEI 看返回值 —— 这是最终判据
+      const readBack = await evaluate(`new Promise(function (res) {
+        var B = window.jsBridge;
+        if (!B) return res({ error: 'no jsBridge' });
+        var tries = 0;
+        function go() {
+          tries++;
+          if (typeof B.getIMEI !== 'function') {
+            if (tries < 20) return setTimeout(go, 500);
+            return res({ error: 'getIMEI 不存在' });
+          }
+          var done = false;
+          var to = setTimeout(function () { if (!done) { done = true; res({ timeout: true }); } }, 8000);
+          try {
+            B.getIMEI(function () {
+              if (done) return;
+              done = true; clearTimeout(to);
+              var a = Array.prototype.slice.call(arguments);
+              res({ args: a.map(String), patchedFlag: !!window.__idPatched });
+            });
+          } catch (e) {
+            if (done) return;
+            done = true; clearTimeout(to); res({ error: String(e) });
+          }
+        }
+        go();
+      })`);
+
+      out = { installed: true, trace, readBack };
+      break;
+    }
     case 'user-info': {
       // 权威判据来源：前端登录后把用户信息（含额度 quota）存在 localStorage。
       // adcap/quota 的 viewed_today 依赖 OAID 匹配，OAID 变了就永远查不到，

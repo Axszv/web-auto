@@ -393,13 +393,19 @@ echo "[ad] app pid: $pid"
 # 带 Luhn 校验位、前 8 位是厂商 TAC。App 的 OAID 链退到 getIMEI 之后会把这个
 # 一眼假的值塞进广告请求。jsBridge 是注入 WebView 的 JS 对象，可以在 JS 层直接替换。
 #
-# patch-ids 内部会起一个 800ms 的定时器反复覆盖，防止原生桥把原方法塞回来。
+# 时机是关键：上一版在 App 启动后打补丁，覆盖的函数一次都没被调用
+# （id-trace 的 patchedCalls 为空），因为 App 启动完成时已经读过一次 OAID 并缓存了。
+# 现在改用 CDP 的 Page.addScriptToEvaluateOnNewDocument —— 在页面加载**之前**注入，
+# 然后重启一次 App 让它带着补丁重新走初始化流程。
 if [[ "${PATCH_IDS:-1}" == "1" ]]; then
-  echo "[ad] 覆盖设备标识: $(cdp patch-ids | head -c 400)"
-  sleep 2
-  # 确认 App 读到的是覆盖后的值（id-trace 会显示原生回调是否真的被我们劫持）
-  echo "[ad] 标识读取记录: $(cdp id-trace | head -c 300)"
+  # patch-and-verify 一次调用里完成：装 pre-document 补丁 → 重启 App → 读回验证。
+  # 必须一次完成，因为 Page.addScriptToEvaluateOnNewDocument 按 CDP 会话生效，
+  # 而 cdp() 每次都新建连接。
+  echo "[ad] 安装补丁并验证: $(cdp patch-and-verify "$SERIAL" | head -c 700)"
+  dismiss_immersive_tip || true
   echo "[ad] App 实际读到的 id: $(cdp get-oaid | head -c 200)"
+  pid="$(app_pid)"
+  echo "[ad] 重启后 app pid: $pid"
 fi
 
 # Frida hook（IMEI 伪装）已默认关闭 —— ENABLE_FRIDA=1 才启用。
