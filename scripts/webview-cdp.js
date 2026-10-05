@@ -57,7 +57,7 @@ async function main() {
   const { execSync } = require('child_process');
   execSync(`adb -s ${serial} forward tcp:${CDP_PORT} localabstract:webview_devtools_remote_${pid}`, { stdio: 'ignore' });
 
-  const { ws, evaluate } = await connect();
+  const { ws, send, evaluate } = await connect();
   let out;
   switch (cmd) {
     case 'status': {
