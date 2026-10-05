@@ -454,6 +454,63 @@ echo "[ad] net check:"
 echo "[ad] dismiss tips: $(cdp dismiss-tips)"
 sleep 2
 
+# === Redroid 属性伪装 ===
+# 会docker restart 容器让 Android 重读 build.prop，App 会被杀掉重启 —— 所以必须放在
+# 登录和 OAID 读取之前，否则改完属性 App 里缓存的还是旧值，等于白改。
+if [[ "${SPOOF_PROPS:-1}" == "1" ]]; then
+  echo "[ad] --- 属性伪装能力实测 ---"
+  {
+    echo "--- 改前"
+    for p in ro.hardware ro.product.model ro.product.brand ro.product.manufacturer              ro.product.device ro.product.name ro.build.fingerprint ro.build.tags              ro.build.type ro.build.characteristics ro.product.board ro.secure; do
+      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
+    done
+    echo "--- 尝试 setprop（ro.* 运行时通常只读）"
+    adb_quick setprop ro.hardware qcom
+    adb_quick setprop ro.build.tags release-keys
+    adb_quick setprop ro.build.type user
+    adb_quick setprop ro.build.characteristics phone
+    sleep 2
+    for p in ro.hardware ro.build.tags ro.build.type ro.build.characteristics; do
+      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
+    done
+  } 2>&1 | tee "$out/prop-probe.txt" | sed 's/^/[ad] /'
+  echo "[ad] --- 改 build.prop（docker exec 才是真 root；restart 保留可写层）---"
+  {
+    # 上一轮用 adb shell su -c，静默失败 —— Redroid 的 adb shell 是 uid=2000(shell)，
+    # su 没执行。容器是 --privileged，docker exec 进去才是真 root。
+    for kv in "ro.hardware=qcom" "ro.hardware.egl=adreno" "ro.hardware.vulkan=adreno"               "ro.build.tags=release-keys" "ro.build.type=user"               "ro.build.characteristics=phone" "ro.product.board=pudding"               "ro.board.platform=kalama" "ro.kernel.qemu=0" "ro.secure=1"; do
+      k="${kv%%=*}"; v="${kv#*=}"
+      docker exec redroid sh -c "sed -i 's|^${k}=.*|${k}=${v}|' /system/build.prop" 2>/dev/null
+      docker exec redroid sh -c "grep -q '^${k}=' /system/build.prop || echo '${k}=${v}' >> /system/build.prop" 2>/dev/null
+    done
+    docker exec redroid sync 2>/dev/null
+    echo "--- build.prop 里的实际内容（改后）"
+    for p in ro.hardware ro.build.tags ro.build.type ro.build.characteristics ro.product.board; do
+      echo "  $p = $(docker exec redroid sh -c "grep '^${p}=' /system/build.prop | head -1" 2>/dev/null | tr -d '')"
+    done
+    echo "--- 重启容器让 Android 重新读取"
+    docker restart redroid >/dev/null 2>&1
+    sleep 20
+    adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
+    for _ in $(seq 1 30); do
+      b="$(adb_quick getprop sys.boot_completed 2>/dev/null | tr -d '')"
+      [[ "$b" == "1" ]] && break
+      sleep 4
+    done
+    adb wait-for-device >/dev/null 2>&1 || true
+    echo "--- 重启后 getprop 实际值"
+    for p in ro.hardware ro.build.tags ro.build.type ro.build.characteristics; do
+      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
+    done
+    echo "--- 重启后重新拉起 App"
+    adb_run am start -n "$PKG/$ACT" >/dev/null 2>&1 || true
+    sleep 20
+  } 2>&1 | tee -a "$out/prop-probe.txt" | sed 's/^/[ad] /'
+  echo "[ad] --- build.prop 处理结束（改完需重启 Android 才完全生效）---"
+
+  echo "[ad] --- 实测结束 ---"
+fi
+
 # 登录（若在登录页）：提交后轮询等待，跳出 #/auth 才算成功
 if [[ "$(cdp status)" == *"hasLogin\":true"* ]]; then
   echo "[ad] login: $(cdp login "$ARITY_USER" "$ARITY_PASS")"
@@ -491,50 +548,15 @@ echo "[ad] ad-network probe: $(cdp fetch-test)"
 echo "[ad] bridge methods: $(cdp bridge-list)"
 echo "[ad] getloadFailMessage: $(cdp call-bridge getloadFailMessage '{}' 2>&1 | head -c 400)"
 
+# === Redroid 属性伪装：必须在 App 读 OAID 之前做完 ===
+# 这里会 docker restart 容器（让 Android 重新读取 build.prop），App 会被杀掉重启。
+# 所以整块必须放在登录和 OAID 读取之前 —— 否则改完属性，App 里缓存的还是旧值。
+
 # 读取本机（Redroid）真实设备标识，供 adcap 查询用；不用真机硬编码值
 # === Redroid 属性伪装能力实测 ===
 # 已知踩过的坑：docker run -e ro.hardware=qcom 不生效，getprop 读出来仍是 redroid。
 # Redroid 只把 androidboot.* 前缀的环境变量转成系统属性。这里实测到底哪种方式可行，
 # 才知道「改 getprop」这条路是不是根本没走过。
-if [[ "${SPOOF_PROPS:-1}" == "1" ]]; then
-  echo "[ad] --- 属性伪装能力实测 ---"
-  {
-    echo "--- 改前"
-    for p in ro.hardware ro.product.model ro.product.brand ro.product.manufacturer              ro.product.device ro.product.name ro.build.fingerprint ro.build.tags              ro.build.type ro.build.characteristics ro.product.board ro.secure; do
-      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
-    done
-    echo "--- 尝试 setprop（ro.* 运行时通常只读）"
-    adb_quick setprop ro.hardware qcom
-    adb_quick setprop ro.build.tags release-keys
-    adb_quick setprop ro.build.type user
-    adb_quick setprop ro.build.characteristics phone
-    sleep 2
-    for p in ro.hardware ro.build.tags ro.build.type ro.build.characteristics; do
-      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
-    done
-  } 2>&1 | tee "$out/prop-probe.txt" | sed 's/^/[ad] /'
-  echo "[ad] --- 改 build.prop（Redroid 是 --privileged，可remount）---"
-  {
-    echo "--- 尝试 remount 并改写 build.prop"
-    adb_quick su -c 'mount -o remount,rw /system' 2>&1 | head -2
-    adb_quick su -c 'mount | grep " / "' 2>&1 | head -2
-    # 先备份，再按行替换关键属性
-    adb_quick su -c 'cp /system/build.prop /data/local/tmp/build.prop.bak' 2>&1 | head -1
-    for kv in "ro.hardware=qcom" "ro.board.platform=kalama" "ro.product.board=pudding"; do
-      k="${kv%%=*}"; v="${kv#*=}"
-      adb_quick su -c "sed -i 's|^\$k=.*|\$k=\$v|' /system/build.prop" 2>&1 | head -1
-    done
-    adb_quick su -c 'sync' >/dev/null 2>&1
-    sleep 3
-    echo "--- 改后（若与改前不同则 build.prop 可写）"
-    for p in ro.hardware ro.board.platform ro.product.board; do
-      echo "  $p = $(adb_quick getprop $p 2>/dev/null)"
-    done
-  } 2>&1 | tee -a "$out/prop-probe.txt" | sed 's/^/[ad] /'
-  echo "[ad] --- build.prop 处理结束（改完需重启 Android 才完全生效）---"
-
-  echo "[ad] --- 实测结束 ---"
-fi
 
 OAID_JSON="$(cdp get-oaid)"
 echo "[ad] device id: $OAID_JSON"
