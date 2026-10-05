@@ -29,11 +29,12 @@ permissions:
   contents: read
 
 concurrency:
-  # 按 matrix 索引分组，让不同 IP 的采样能并发跑。原来固定成 arityflow-ads
-  # 会把所有 run 串行化 —— 同一时间只有一个 run，永远只能抽到一个出口 IP，
-  # 命中概率就固定在单 IP 上。实测 10-02 成功、之后全灭，最可能的解释就是
-  # runner IP 池里「干净 IP」的比例波动。
-  group: arityflow-ads-${{ github.run_attempt }}-${{ strategy.job-index || 0 }}
+  # 按 run_id 分组，让 matrix 的 6 个 job 各自并发。
+  # concurrency 表达式里拿不到 strategy 上下文（job 级才生效），所以用 run_id：
+  # 同一 run 的 6 个 matrix job run_id 各不相同 → 并发；
+  # 手动重跑同一个 run 时 run_id 相同 → 取消上一次未完成的，符合直觉。
+  # 原来固定 group: arityflow-ads 会把所有 run 串行化，永远只能抽到一个出口 IP。
+  group: arityflow-ads-${{ github.run_id }}
 
 jobs:
   ads:
