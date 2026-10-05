@@ -260,8 +260,26 @@ async function main() {
                   return val;
                 };
                 fn.__patched = true;
-                B[name] = fn;
-              } catch (e) {}
+                // addJavascriptInterface 注入的对象，其属性描述符可能是只读的，
+                // 直接赋值会被静默忽略。依次尝试三种覆盖方式，全失败才算真不可覆盖。
+                var okNow = false;
+                try { Object.defineProperty(B, name, { value: fn, writable: true, configurable: true, enumerable: true }); okNow = (B[name] === fn); } catch (e) {}
+                if (!okNow) { try { B[name] = fn; okNow = (B[name] === fn); } catch (e) {} }
+                if (!okNow) {
+                  try {  // 有些桥把方法挂在原型上
+                    Object.defineProperty(Object.getPrototypeOf(B) || B, name, { value: fn, writable: true, configurable: true, enumerable: true });
+                    okNow = (B[name] === fn);
+                  } catch (e) {}
+                }
+                // 关键：赋值后立刻读回，确认真的换掉了。
+                // （原生注入的对象属性可能是只读的，赋值静默失败）
+                var after = B[name];
+                if (after !== fn) {
+                  window.__patchFail = (window.__patchFail || []).concat([name + ': 赋值未生效（属性只读）']);
+                } else {
+                  window.__patchOk = (window.__patchOk || []).concat([name]);
+                }
+              } catch (e) { window.__patchFail = (window.__patchFail || []).concat([name + ': ' + e]); }
             }
           } catch (e) {}
         })();
@@ -277,8 +295,8 @@ async function main() {
       // 等新 document 加载 + 补丁执行完
       await new Promise(r => setTimeout(r, 25000));
       const trace = await evaluate(`(function () {
-        return { patched: window.__patched || [], count: (window.__patched || []).length,
-                 patchedFlag: !!window.__idPatched, hasBridge: !!window.jsBridge };
+        return { calls: (window.__patched||[]).length, ok: window.__patchOk||[], fail: window.__patchFail||[],
+                 flag: !!window.__idPatched, hasBridge: !!window.jsBridge };
       })()`);
 
       // 直接调 getIMEI 看返回值 —— 这是最终判据
