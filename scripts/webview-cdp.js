@@ -394,6 +394,30 @@ async function main() {
       })()`);
       break;
     }
+    case 'ad-ask': {
+      // 同一次 CDP 连接内完成「发请求 + 等结果 + 回收事件」。
+      // 分成两次调用（ad-watch 再 ad-trace）会因每次重建 WebSocket 连接而把
+      // socket 打断（CDP_ERR:socket hang up），事件就丢了。
+      out = await evaluate(`(async () => {
+        const T = window.jsBridge && window.jsBridge.tobid;
+        if (!T) return { error: 'no jsBridge.tobid' };
+        const events = [];
+        T.setListener(function (evt, data) {
+          try { events.push({ at: Date.now(), action: data && data.action, msg: data && data.message }); } catch (e) {}
+        });
+        try { T.requestPermissionIfNecessary(); } catch (e) {}
+        const user = JSON.parse(localStorage.getItem('user') || '{}') || {};
+        T.reward({ adId: '7368352132657660', userId: String(user.id || '') },
+                 function (ok, err) { events.push({ cb: true, ok: ok, err: String(err) }); });
+        const t0 = Date.now();
+        while (Date.now() - t0 < 60000) {
+          await new Promise(r => setTimeout(r, 2000));
+          if (events.some(e => /LoadError|PlayStart|LoadSuccess/.test(e.action || ''))) break;
+        }
+        return { events, total: events.length };
+      })()`);
+      break;
+    }
     case 'ad-trace': {
       out = await evaluate(`(() => (window.__adTrace || []).map(e => ({
         at: e.at,
