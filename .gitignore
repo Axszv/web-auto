@@ -16,6 +16,7 @@ scripts/*
 !scripts/webview-cdp.js
 !scripts/decode-frida-log.js
 !scripts/frida-start.sh
+!scripts/clear-emulator-fingerprint.sh
 !scripts/frida/
 
 *.log
