@@ -72,3 +72,9 @@ qd.arityflow.top 账号.md
 # Frida 临时工作区（诊断用，已在 docs/arityflow-ads.md 记录结论）
 .frida-tmp/
 .tscheck/
+# 临时分析目录，不入库
+.apkcfg/
+.proxytest/
+proxytest/
+.emu.sh
+.wf.sh
