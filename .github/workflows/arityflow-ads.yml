@@ -134,6 +134,13 @@ jobs:
           bash scripts/probe-oaid.sh diagnostics
           exit 0
 
+      - name: 清除容器模拟器指纹（广告SDK靠它认模拟器）
+        shell: bash
+        run: |
+          set +e
+          bash scripts/clear-emulator-fingerprint.sh diagnostics
+          exit 0
+
       - name: Watch daily rewarded ads
         env:
           IP_SAMPLE: ${{ strategy.job-index }}
