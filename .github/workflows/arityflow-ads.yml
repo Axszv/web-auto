@@ -6,7 +6,7 @@ on:
     # 刻意压到最低：GDT 侧返回的 109502「该广告位请求量大而收入较低，出于成本考虑降低填充」
     # 说明请求频率本身就会被判为低价值流量 —— 多跑不提高命中率，反而被降填充。
     # 详见 docs/arityflow-ads.md
-    - cron: '17 1 * * *'
+    # - cron: '17 1 * * *'
   workflow_dispatch:
     inputs:
       max_ads:
